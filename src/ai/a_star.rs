@@ -2,20 +2,26 @@ use std::{cmp::Ordering, collections::BinaryHeap};
 
 use bevy::math::Vec2;
 
-use super::pathfinding::{Pathfinding, PathfindingGraphConnection, PathfindingGraphNode};
+use super::pathfinding::{PathfindingGraph, PathfindingGraphConnection, PathfindingGraphNode};
 
-pub fn find_path(pathfinding: &Pathfinding, start_position: Vec2) -> Option<Vec<PathNode>> {
-    if pathfinding.goal_graph_node.is_none() {
+pub fn find_path(
+    pathfinding: &PathfindingGraph,
+    start_position: Vec2,
+    goal_position: Vec2,
+) -> Option<Vec<PathNode>> {
+    let goal_node_option = get_goal_node(pathfinding, goal_position);
+
+    if goal_node_option.is_none() {
         return None;
     }
 
-    let goal_node = pathfinding.goal_graph_node.as_ref().unwrap();
+    let goal_node = goal_node_option.unwrap();
 
     let mut open_list: BinaryHeap<AStarNode> = BinaryHeap::new();
     let mut closed_list: Vec<AStarNode> = vec![];
 
     // Get the start node
-    let start_node = get_start_node(pathfinding, start_position);
+    let start_node = get_start_node(pathfinding, start_position, goal_position);
 
     // Add the start node to the open list
     open_list.push(start_node);
@@ -64,7 +70,7 @@ pub fn find_path(pathfinding: &Pathfinding, start_position: Vec2) -> Option<Vec<
                 new_node.g_cost = connection.dist + current_node.g_cost;
 
                 // Set the h-cost to the distance to the goal
-                new_node.h_cost = (pathfinding.goal_position - new_node.position).length();
+                new_node.h_cost = (goal_position - new_node.position).length();
             }
 
             // Set the parent of the new node
@@ -75,7 +81,11 @@ pub fn find_path(pathfinding: &Pathfinding, start_position: Vec2) -> Option<Vec<
     }
 }
 
-fn get_start_node(pathfinding: &Pathfinding, start_position: Vec2) -> AStarNode {
+fn get_start_node(
+    pathfinding: &PathfindingGraph,
+    start_position: Vec2,
+    goal_position: Vec2,
+) -> AStarNode {
     let mut start_graph_node: PathfindingGraphNode = PathfindingGraphNode {
         id: 0,
         position: Vec2::ZERO,
@@ -98,8 +108,8 @@ fn get_start_node(pathfinding: &Pathfinding, start_position: Vec2) -> AStarNode 
         }
 
         if distance == start_graph_node_distance {
-            let start_node_to_goal = (pathfinding.goal_position - start_position).length_squared();
-            let current_node_to_goal = (pathfinding.goal_position - node.position).length_squared();
+            let start_node_to_goal = (goal_position - start_position).length_squared();
+            let current_node_to_goal = (goal_position - node.position).length_squared();
 
             if current_node_to_goal > start_node_to_goal {
                 continue;
@@ -113,9 +123,29 @@ fn get_start_node(pathfinding: &Pathfinding, start_position: Vec2) -> AStarNode 
     let mut start_a_star_node = AStarNode::new(&start_graph_node);
 
     // Set the h-cost to the distance to the goal
-    start_a_star_node.h_cost = (pathfinding.goal_position - start_a_star_node.position).length();
+    start_a_star_node.h_cost = (goal_position - start_a_star_node.position).length();
 
     return start_a_star_node;
+}
+
+fn get_goal_node(
+    pathfinding: &PathfindingGraph,
+    goal_position: Vec2,
+) -> Option<PathfindingGraphNode> {
+    let mut goal_graph_node: Option<PathfindingGraphNode> = None;
+    let mut closest_distance = f32::MAX;
+    for node_index in 0..pathfinding.nodes.len() {
+        let node = &pathfinding.nodes[node_index];
+
+        let distance = (goal_position - node.position).length_squared();
+
+        if distance < closest_distance {
+            closest_distance = distance;
+            goal_graph_node = Some(node.clone());
+        }
+    }
+
+    goal_graph_node
 }
 
 #[derive(Clone, Debug)]

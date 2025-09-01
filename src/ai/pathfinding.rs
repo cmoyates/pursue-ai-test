@@ -6,22 +6,17 @@ use bevy::{
 
 use crate::{level::Level, utils::line_intersect, GRAVITY_STRENGTH};
 
-use super::platformer_ai::{PLATFORMER_AI_AGENT_RADIUS, PLATFORMER_AI_JUMP_FORCE};
+use super::{platformer_ai::PLATFORMER_AI_JUMP_FORCE, pursue_ai::PURSUE_AI_AGENT_RADIUS};
 
 pub struct PathfindingPlugin;
 
 impl Plugin for PathfindingPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Pathfinding {
-            nodes: Vec::new(),
-            goal_graph_node: None,
-            goal_position: Vec2::ZERO,
-            active: false,
-        });
+        app.insert_resource(PathfindingGraph { nodes: Vec::new() });
     }
 }
 
-pub fn init_pathfinding_graph(level: &Level, mut pathfinding: ResMut<Pathfinding>) {
+pub fn init_pathfinding_graph(level: &Level, mut pathfinding: ResMut<PathfindingGraph>) {
     place_nodes(&mut pathfinding, level);
 
     make_walkable_connections_2_way(&mut pathfinding);
@@ -30,7 +25,7 @@ pub fn init_pathfinding_graph(level: &Level, mut pathfinding: ResMut<Pathfinding
 
     make_node_ids_indices(&mut pathfinding);
 
-    make_jumpable_connections(&mut pathfinding, level, PLATFORMER_AI_AGENT_RADIUS);
+    make_jumpable_connections(&mut pathfinding, level, PURSUE_AI_AGENT_RADIUS);
 
     calculate_normals(&mut pathfinding, level);
 
@@ -69,14 +64,11 @@ pub struct PathfindingGraphNode {
 }
 
 #[derive(Resource)]
-pub struct Pathfinding {
+pub struct PathfindingGraph {
     pub nodes: Vec<PathfindingGraphNode>,
-    pub goal_graph_node: Option<PathfindingGraphNode>,
-    pub goal_position: Vec2,
-    pub active: bool,
 }
 
-pub fn place_nodes(pathfinding: &mut Pathfinding, level: &Level) {
+pub fn place_nodes(pathfinding: &mut PathfindingGraph, level: &Level) {
     let mut outer_container_seen = false;
 
     // Place nodes
@@ -158,7 +150,7 @@ pub fn place_nodes(pathfinding: &mut Pathfinding, level: &Level) {
 }
 
 /// Makes all of the connections between nodes 2-way
-pub fn make_walkable_connections_2_way(pathfinding: &mut Pathfinding) {
+pub fn make_walkable_connections_2_way(pathfinding: &mut PathfindingGraph) {
     for node_index in 0..pathfinding.nodes.len() {
         // Make a clone of the current node to appease the borrow checker
         let node = pathfinding.nodes[node_index].clone();
@@ -179,7 +171,7 @@ pub fn make_walkable_connections_2_way(pathfinding: &mut Pathfinding) {
 }
 
 /// Removes redundant nodes that occupy the same position
-pub fn remove_duplicate_nodes(pathfinding: &mut Pathfinding) {
+pub fn remove_duplicate_nodes(pathfinding: &mut PathfindingGraph) {
     let mut i = 0;
     while i < pathfinding.nodes.len() {
         let mut j = i + 1;
@@ -223,7 +215,7 @@ pub fn remove_duplicate_nodes(pathfinding: &mut Pathfinding) {
 }
 
 /// Updates the ids and connections to reflect the indices of the nodes
-pub fn make_node_ids_indices(pathfinding: &mut Pathfinding) {
+pub fn make_node_ids_indices(pathfinding: &mut PathfindingGraph) {
     let pathfinding_nodes_copy = pathfinding.nodes.clone();
 
     for node_index in 0..pathfinding.nodes.len() {
@@ -249,7 +241,7 @@ pub fn make_node_ids_indices(pathfinding: &mut Pathfinding) {
     }
 }
 
-pub fn make_jumpable_connections(pathfinding: &mut Pathfinding, level: &Level, radius: f32) {
+pub fn make_jumpable_connections(pathfinding: &mut PathfindingGraph, level: &Level, radius: f32) {
     for i in 0..pathfinding.nodes.len() {
         let main_node = &pathfinding.nodes[i];
 
@@ -437,7 +429,7 @@ pub fn jumpability_check(
     };
 }
 
-pub fn calculate_normals(pathfinding: &mut Pathfinding, level: &Level) {
+pub fn calculate_normals(pathfinding: &mut PathfindingGraph, level: &Level) {
     for node_index in 0..pathfinding.nodes.len() {
         let node = &pathfinding.nodes[node_index];
 
@@ -456,7 +448,7 @@ pub fn calculate_normals(pathfinding: &mut Pathfinding, level: &Level) {
     }
 }
 
-pub fn setup_corners(pathfinding: &mut Pathfinding) {
+pub fn setup_corners(pathfinding: &mut PathfindingGraph) {
     for node_index in 0..pathfinding.nodes.len() {
         // let node = &mut pathfinding.nodes[node_index];
 

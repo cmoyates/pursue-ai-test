@@ -13,7 +13,7 @@ use bevy::{
 
 use crate::{s_move_goal_point, GizmosVisible, Physics, GRAVITY_STRENGTH};
 
-use super::{a_star::find_path, pathfinding::Pathfinding};
+use super::{a_star::find_path, pathfinding::PathfindingGraph};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathFollowingStrategy {
@@ -26,8 +26,6 @@ pub enum PathFollowingStrategy {
     AgentToGoal,
     None,
 }
-
-pub const PLATFORMER_AI_AGENT_RADIUS: f32 = 8.0;
 
 const WANDER_MAX_SPEED: f32 = 3.0;
 // const PURSUE_MAX_SPEED: f32 = 5.0;
@@ -56,7 +54,7 @@ pub struct PlatformerAI {
 
 pub fn s_platformer_ai_movement(
     mut platformer_ai_query: Query<(&mut Transform, &mut Physics, &mut PlatformerAI)>,
-    pathfinding: Res<Pathfinding>,
+    pathfinding: Res<PathfindingGraph>,
     gismo_visible: Res<GizmosVisible>,
     mut gizmos: Gizmos,
 ) {
@@ -67,6 +65,7 @@ pub fn s_platformer_ai_movement(
             &physics,
             &mut gizmos,
             gismo_visible.visible,
+            Vec2::new(0.0, 0.0),
         );
 
         if gismo_visible.visible {
@@ -129,18 +128,19 @@ pub fn s_platformer_ai_movement(
 }
 
 fn get_move_inputs(
-    pathfinding: &Pathfinding,
+    pathfinding: &PathfindingGraph,
     agent_position: Vec2,
     agent_physics: &Physics,
     gizmos: &mut Gizmos,
     gizmos_visible: bool,
+    goal_position: Vec2,
 ) -> (Vec2, Vec2, Option<Vec2>, Option<Vec2>) {
     let mut move_dir = Vec2::ZERO;
     let mut jump_velocity = Vec2::ZERO;
     let mut jump_from_node = None;
     let mut jump_to_node = None;
 
-    let path = find_path(&pathfinding, agent_position);
+    let path = find_path(&pathfinding, agent_position, goal_position);
 
     if let Some(path) = path {
         if gizmos_visible {
@@ -152,7 +152,7 @@ fn get_move_inputs(
                 prev_pos = path[i].position;
             }
 
-            gizmos.line_2d(prev_pos, pathfinding.goal_position, Color::GREEN);
+            // gizmos.line_2d(prev_pos, pathfinding.goal_position, Color::GREEN);
         }
 
         if path.len() > 1 {
@@ -238,7 +238,7 @@ fn get_move_inputs(
                 }
                 PathFollowingStrategy::AgentToNextNode => path[1].position - agent_position,
                 PathFollowingStrategy::AgentToNextNodeOffset => offset_next_node - agent_position,
-                PathFollowingStrategy::AgentToGoal => pathfinding.goal_position - agent_position,
+                // PathFollowingStrategy::AgentToGoal => pathfinding.goal_position - agent_position,
                 PathFollowingStrategy::None => Vec2::ZERO,
                 _ => Vec2::ZERO,
             }

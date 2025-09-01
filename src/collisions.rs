@@ -10,7 +10,10 @@ use bevy::{
 };
 
 use crate::{
-    ai::platformer_ai::{s_platformer_ai_movement, PlatformerAI},
+    ai::{
+        platformer_ai::{s_platformer_ai_movement, PlatformerAI},
+        pursue_ai::PursueAI,
+    },
     level::Level,
     utils::{line_intersect, side_of_line_detection},
     Physics,
@@ -25,7 +28,7 @@ impl Plugin for CollisionPlugin {
 }
 
 pub fn s_collision(
-    mut entity_query: Query<(&mut Transform, &mut Physics, &mut PlatformerAI)>,
+    mut entity_query: Query<(&mut Transform, &mut Physics, &mut PursueAI)>,
     level: Res<Level>,
     mut gizmos: Gizmos,
 ) {
@@ -77,26 +80,26 @@ pub fn s_collision(
                 if touching_line {
                     let normal_dir = (transform.translation.xy() - projection).normalize_or_zero();
 
-                    // If the line is not above the player
+                    // If the line is not above the agent
                     if normal_dir.y >= -0.01 {
-                        // Add the normal dir to the players new normal
+                        // Add the normal dir to the agents new normal
                         new_normal -= normal_dir;
 
-                        // If the player is on a wall
+                        // If the agent is on a wall
                         if normal_dir.x.abs() >= 0.8 {
                             physics.walled = normal_dir.x.signum() as i8;
                             physics.has_wall_jumped = false;
                             physics.grounded = false;
-                            platformer_ai.jump_from_pos = None;
-                            platformer_ai.jump_to_pos = None;
+                            // platformer_ai.jump_from_pos = None;
+                            // platformer_ai.jump_to_pos = None;
                         }
-                        // If the player is on the ground
+                        // If the agent is on the ground
                         else if normal_dir.y > 0.01 {
                             physics.grounded = true;
                             physics.walled = 0;
                             physics.has_wall_jumped = false;
-                            platformer_ai.jump_from_pos = None;
-                            platformer_ai.jump_to_pos = None;
+                            // platformer_ai.jump_from_pos = None;
+                            // platformer_ai.jump_to_pos = None;
                         }
                     }
                 }
@@ -132,15 +135,15 @@ pub fn s_collision(
             }
         }
 
-        // Update the players normal
+        // Update the agents normal
         new_normal = new_normal.normalize_or_zero();
         physics.normal = new_normal;
 
-        // Remove the players velocity in the direction of the normal
+        // Remove the agents velocity in the direction of the normal
         let velocity_adjustment = physics.velocity.dot(new_normal) * new_normal;
         physics.velocity -= velocity_adjustment;
 
-        // Update the players position
+        // Update the agents position
         transform.translation += adjustment.extend(0.0);
     }
 }

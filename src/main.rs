@@ -121,6 +121,9 @@ pub fn s_init(mut commands: Commands, pathfinding: ResMut<PathfindingGraph>) {
             current_target_node: None,
             jump_from_pos: None,
             jump_to_pos: None,
+            cached_path: None,
+            last_goal_position: None,
+            current_path_index: 0,
         },
         PursueAI {
             state: PursueAIState::Wander,

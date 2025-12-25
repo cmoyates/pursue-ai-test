@@ -14,7 +14,7 @@ use bevy::{
 
 use crate::{s_move_goal_point, GoalPoint, GizmosVisible, Physics, GRAVITY_STRENGTH};
 
-use super::{a_star::find_path, pathfinding::PathfindingGraph};
+use super::{a_star::{find_path, PathNode}, pathfinding::PathfindingGraph};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(dead_code)]
@@ -45,6 +45,11 @@ const VELOCITY_MAGNITUDE_THRESHOLD: f32 = 0.1;
 const JUMP_TIME_MULTIPLIER: f32 = 1.0;
 const PATHFINDING_NODE_GIZMO_RADIUS: f32 = 5.0;
 
+// Path caching constants (using squared distances to avoid sqrt)
+const GOAL_CHANGE_THRESHOLD_SQ: f32 = 25.0; // 5.0 squared
+const PATH_DEVIATION_THRESHOLD_SQ: f32 = 100.0; // 10.0 squared
+const NODE_REACHED_THRESHOLD_SQ: f32 = 64.0; // 8.0 squared (agent radius squared)
+
 #[allow(dead_code)]
 pub struct PlatformerAIPlugin;
 
@@ -59,6 +64,10 @@ pub struct PlatformerAI {
     pub current_target_node: Option<usize>,
     pub jump_from_pos: Option<Vec2>,
     pub jump_to_pos: Option<Vec2>,
+    // Path caching fields
+    pub cached_path: Option<Vec<PathNode>>,
+    pub last_goal_position: Option<Vec2>,
+    pub current_path_index: usize,
 }
 
 pub fn s_platformer_ai_movement(
@@ -80,6 +89,7 @@ pub fn s_platformer_ai_movement(
             pathfinding.as_ref(),
             transform.translation.xy(),
             &physics,
+            &mut platformer_ai,
             &mut gizmos,
             gismo_visible.visible,
             goal_position,
@@ -142,6 +152,7 @@ fn get_move_inputs(
     pathfinding: &PathfindingGraph,
     agent_position: Vec2,
     agent_physics: &Physics,
+    platformer_ai: &mut PlatformerAI,
     gizmos: &mut Gizmos,
     gizmos_visible: bool,
     goal_position: Vec2,
@@ -151,12 +162,34 @@ fn get_move_inputs(
     let mut jump_from_node = None;
     let mut jump_to_node = None;
 
-    let path = find_path(pathfinding, agent_position, goal_position);
+    // Check if cached path is still valid
+    let path_needs_recalculation = should_recalculate_path(
+        platformer_ai,
+        agent_position,
+        goal_position,
+        pathfinding,
+    );
 
-    if let Some(path) = path {
+    let path = if path_needs_recalculation {
+        // Recalculate path
+        let new_path = find_path(pathfinding, agent_position, goal_position);
+        if let Some(ref path_vec) = new_path {
+            platformer_ai.cached_path = Some(path_vec.clone());
+        } else {
+            platformer_ai.cached_path = None;
+        }
+        platformer_ai.last_goal_position = Some(goal_position);
+        platformer_ai.current_path_index = 0;
+        new_path
+    } else {
+        // Use cached path
+        platformer_ai.cached_path.clone()
+    };
+
+    if let Some(path) = &path {
         if gizmos_visible {
             let mut prev_pos = agent_position;
-            for node in &path {
+            for node in path {
                 gizmos.circle_2d(
                     node.position,
                     PATHFINDING_NODE_GIZMO_RADIUS,
@@ -168,22 +201,24 @@ fn get_move_inputs(
             }
         }
 
-        if path.len() > 1 {
+        // Use current_path_index to get the current and next nodes
+        let current_idx = platformer_ai.current_path_index;
+        if current_idx < path.len() && path.len() > current_idx + 1 {
             let offset_current_node =
-                path[0].position + pathfinding.nodes[path[0].id].normal * agent_physics.radius;
+                path[current_idx].position + pathfinding.nodes[path[current_idx].id].normal * agent_physics.radius;
             let offset_next_node: Vec2 =
-                path[1].position + pathfinding.nodes[path[1].id].normal * agent_physics.radius;
+                path[current_idx + 1].position + pathfinding.nodes[path[current_idx + 1].id].normal * agent_physics.radius;
 
             let agent_on_wall = agent_physics.normal.y > -0.01;
 
-            let corner_is_external = pathfinding.nodes[path[0].id].is_external_corner;
+            let corner_is_external = pathfinding.nodes[path[current_idx].id].is_external_corner;
 
             let current_node_is_corner = corner_is_external.is_some();
 
-            let is_jumpable_connection = pathfinding.nodes[path[0].id]
+            let is_jumpable_connection = pathfinding.nodes[path[current_idx].id]
                 .jumpable_connections
                 .iter()
-                .any(|jumpable_connection| jumpable_connection.node_id == path[1].id);
+                .any(|jumpable_connection| jumpable_connection.node_id == path[current_idx + 1].id);
 
             let falling = agent_physics.normal.length_squared() <= 0.0;
 
@@ -196,7 +231,7 @@ fn get_move_inputs(
                     let agent_on_other_side_next_frame = agent_on_other_side_next_frame(
                         agent_position,
                         agent_physics.velocity,
-                        path[0].position,
+                        path[current_idx].position,
                         agent_on_wall,
                     );
 
@@ -236,15 +271,15 @@ fn get_move_inputs(
             }
 
             move_dir = match path_following_strategy {
-                PathFollowingStrategy::CurrentNodeToNextNode => path[1].position - path[0].position,
+                PathFollowingStrategy::CurrentNodeToNextNode => path[current_idx + 1].position - path[current_idx].position,
                 PathFollowingStrategy::CurrentNodeOffsetToNextNodeOffset => {
                     offset_next_node - offset_current_node
                 }
-                PathFollowingStrategy::AgentToCurrentNode => path[0].position - agent_position,
+                PathFollowingStrategy::AgentToCurrentNode => path[current_idx].position - agent_position,
                 PathFollowingStrategy::AgentToCurrentNodeOffset => {
                     offset_current_node - agent_position
                 }
-                PathFollowingStrategy::AgentToNextNode => path[1].position - agent_position,
+                PathFollowingStrategy::AgentToNextNode => path[current_idx + 1].position - agent_position,
                 PathFollowingStrategy::AgentToNextNodeOffset => offset_next_node - agent_position,
                 // PathFollowingStrategy::AgentToGoal => pathfinding.goal_position - agent_position,
                 PathFollowingStrategy::None => Vec2::ZERO,
@@ -257,7 +292,7 @@ fn get_move_inputs(
                 || path_following_strategy == PathFollowingStrategy::AgentToNextNode)
                 && is_jumpable_connection
             {
-                let node_position_delta = path[1].position - path[0].position;
+                let node_position_delta = path[current_idx + 1].position - path[current_idx].position;
                 let gravity_acceleration = Vec2::new(0.0, -GRAVITY_STRENGTH);
                 let jump_time = JUMP_TIME_MULTIPLIER
                     * (4.0 * node_position_delta.dot(node_position_delta)
@@ -273,7 +308,67 @@ fn get_move_inputs(
         }
     }
 
+    // Advance path index if agent reached current node
+    if let Some(ref path) = path {
+        advance_path_index(platformer_ai, agent_position, path);
+    }
+
     (move_dir, jump_velocity, jump_from_node, jump_to_node)
+}
+
+fn should_recalculate_path(
+    platformer_ai: &PlatformerAI,
+    agent_position: Vec2,
+    goal_position: Vec2,
+    _pathfinding: &PathfindingGraph,
+) -> bool {
+    // If no cached path, recalculate
+    let Some(ref cached_path) = platformer_ai.cached_path else {
+        return true;
+    };
+
+    // If path is empty or exhausted, recalculate
+    if cached_path.is_empty() || platformer_ai.current_path_index >= cached_path.len() {
+        return true;
+    }
+
+    // If goal moved beyond threshold, recalculate
+    if let Some(last_goal) = platformer_ai.last_goal_position {
+        let goal_delta_sq = (goal_position - last_goal).length_squared();
+        if goal_delta_sq > GOAL_CHANGE_THRESHOLD_SQ {
+            return true;
+        }
+    } else {
+        return true;
+    }
+
+    // If agent deviated significantly from path, recalculate
+    if let Some(current_node) = cached_path.get(platformer_ai.current_path_index) {
+        let deviation_sq = (agent_position - current_node.position).length_squared();
+        if deviation_sq > PATH_DEVIATION_THRESHOLD_SQ {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn advance_path_index(
+    platformer_ai: &mut PlatformerAI,
+    agent_position: Vec2,
+    path: &[PathNode],
+) {
+    // Advance index if agent reached current node
+    while platformer_ai.current_path_index < path.len() {
+        let current_node = &path[platformer_ai.current_path_index];
+        let distance_sq = (agent_position - current_node.position).length_squared();
+        
+        if distance_sq <= NODE_REACHED_THRESHOLD_SQ {
+            platformer_ai.current_path_index += 1;
+        } else {
+            break;
+        }
+    }
 }
 
 fn apply_movement_acceleration(

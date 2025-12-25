@@ -221,6 +221,7 @@ impl PartialEq for AStarNode {
     }
 }
 
+#[derive(Clone)]
 pub struct PathNode {
     pub id: usize,
     pub position: Vec2,

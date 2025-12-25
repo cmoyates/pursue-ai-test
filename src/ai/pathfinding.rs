@@ -1,7 +1,8 @@
 use bevy::{
     app::{App, Plugin},
-    ecs::system::{ResMut, Resource},
+    ecs::system::ResMut,
     math::Vec2,
+    prelude::Resource,
 };
 
 use crate::{level::Level, utils::line_intersect, GRAVITY_STRENGTH};

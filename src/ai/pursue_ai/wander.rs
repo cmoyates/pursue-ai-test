@@ -2,7 +2,7 @@ use bevy::{
     math::{Vec2, Vec3Swizzles},
     transform::components::Transform,
 };
-use rand::Rng;
+use rand::prelude::*;
 
 use crate::{
     ai::{
@@ -53,7 +53,7 @@ pub fn get_random_goal_node(
     let mut furthest_node_distance_sq: f32 = f32::MAX;
 
     for _ in 0..sample_count {
-        let random_node_index = rand::thread_rng().gen_range(0..pathfinding_node_count);
+        let random_node_index = rand::rng().random_range(0..pathfinding_node_count);
         let random_node = &pathfinding.nodes[random_node_index];
 
         let distance_sq = (agent_position - random_node.position).length_squared();

@@ -1,7 +1,7 @@
 use bevy::{
     app::{App, Plugin, Update},
     ecs::{
-        schedule::IntoSystemConfigs,
+        schedule::IntoScheduleConfigs,
         system::{Query, Res},
     },
     gizmos::gizmos::Gizmos,
@@ -32,7 +32,7 @@ pub fn s_collision(
     level: Res<Level>,
     mut gizmos: Gizmos,
 ) {
-    if let Ok((mut transform, mut physics, mut platformer_ai)) = entity_query.get_single_mut() {
+    if let Ok((mut transform, mut physics, mut _platformer_ai)) = entity_query.single_mut() {
         let mut adjustment = Vec2::ZERO;
         let mut new_normal = Vec2::ZERO;
 

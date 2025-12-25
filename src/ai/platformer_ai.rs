@@ -1,13 +1,13 @@
 use bevy::{
     app::{App, Plugin, Update},
+    color::Color,
     ecs::{
         component::Component,
-        schedule::IntoSystemConfigs,
+        schedule::IntoScheduleConfigs,
         system::{Query, Res},
     },
     gizmos::gizmos::Gizmos,
     math::{Vec2, Vec3Swizzles},
-    render::color::Color,
     transform::components::Transform,
 };
 
@@ -72,7 +72,7 @@ pub fn s_platformer_ai_movement(
             gizmos.line_2d(
                 transform.translation.xy(),
                 transform.translation.xy() + move_dir * 15.0,
-                Color::RED,
+                Color::srgb(1.0, 0.0, 0.0),
             );
         }
 
@@ -146,13 +146,13 @@ fn get_move_inputs(
         if gizmos_visible {
             let mut prev_pos = agent_position;
             for i in 0..path.len() {
-                gizmos.circle_2d(path[i].position, 5.0, Color::GREEN);
-                gizmos.line_2d(prev_pos, path[i].position, Color::GREEN);
+                gizmos.circle_2d(path[i].position, 5.0, Color::srgb(0.0, 1.0, 0.0));
+                gizmos.line_2d(prev_pos, path[i].position, Color::srgb(0.0, 1.0, 0.0));
 
                 prev_pos = path[i].position;
             }
 
-            // gizmos.line_2d(prev_pos, pathfinding.goal_position, Color::GREEN);
+            // gizmos.line_2d(prev_pos, pathfinding.goal_position, Color::srgb(0.0, 1.0, 0.0));
         }
 
         if path.len() > 1 {

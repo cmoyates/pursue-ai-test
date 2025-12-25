@@ -11,10 +11,8 @@ use ai::{
 };
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::diagnostic::LogDiagnosticsPlugin;
-use bevy::{
-    app::AppExit,
-    window::{PresentMode, PrimaryWindow},
-};
+use bevy::ecs::schedule::IntoScheduleConfigs;
+use bevy::window::{PresentMode, PrimaryWindow};
 use collisions::{s_collision, CollisionPlugin};
 use level::{generate_level_polygons, Level};
 
@@ -22,7 +20,7 @@ pub const GRAVITY_STRENGTH: f32 = 0.5;
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
+        .insert_resource(ClearColor(Color::srgb(0.0, 0.0, 0.0)))
         .insert_resource(InputDir { dir: Vec2::ZERO })
         .insert_resource(GizmosVisible { visible: false })
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -42,8 +40,7 @@ fn main() {
         // Startup systems
         .add_systems(Startup, s_init)
         // Update systems
-        .add_systems(Update, s_input)
-        .add_systems(Update, s_move_goal_point.after(s_input))
+        .add_systems(Update, (s_input, s_move_goal_point).chain())
         .add_systems(Update, s_render.after(s_collision))
         .run();
 }
@@ -89,7 +86,7 @@ pub fn s_init(mut commands: Commands, pathfinding: ResMut<PathfindingGraph>) {
 
     commands.insert_resource(level);
 
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     commands.spawn((
         Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
@@ -116,7 +113,7 @@ pub fn s_init(mut commands: Commands, pathfinding: ResMut<PathfindingGraph>) {
 
 pub fn s_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut exit: EventWriter<AppExit>,
+    mut exit: MessageWriter<AppExit>,
     mut input_dir: ResMut<InputDir>,
     mut gizmos_visible: ResMut<GizmosVisible>,
     mut platformer_ai_query: Query<(&mut Transform, &mut Physics, &mut PlatformerAI)>,
@@ -127,7 +124,7 @@ pub fn s_input(
     // Escape to exit (if not WASM)
     #[cfg(not(target_arch = "wasm32"))]
     if keyboard_input.just_pressed(KeyCode::Escape) {
-        exit.send(AppExit);
+        exit.write(AppExit::Success);
     }
 
     // R to reset
@@ -171,19 +168,21 @@ pub fn s_input(
 
     // Print some debug info if you click on a pathfinding node
     if mouse_buttons.just_pressed(MouseButton::Left) {
-        let window_size = q_windows.single().resolution.clone();
+        if let Ok(window) = q_windows.single() {
+            let window_size = window.resolution.clone();
 
-        if let Some(position) = q_windows.single().cursor_position() {
-            let mut mouse_pos_world =
-                position - Vec2::new(window_size.width() / 2.0, window_size.height() / 2.0);
-            mouse_pos_world.y *= -1.0;
+            if let Some(position) = window.cursor_position() {
+                let mut mouse_pos_world =
+                    position - Vec2::new(window_size.width() / 2.0, window_size.height() / 2.0);
+                mouse_pos_world.y *= -1.0;
 
-            for node_index in 0..pathfinding.nodes.len() {
-                let node = &pathfinding.nodes[node_index];
+                for node_index in 0..pathfinding.nodes.len() {
+                    let node = &pathfinding.nodes[node_index];
 
-                if (mouse_pos_world - node.position).length_squared() < (3.5_f32).powi(2) {
-                    println!("Node index: {}", node_index);
-                    dbg!(node);
+                    if (mouse_pos_world - node.position).length_squared() < (3.5_f32).powi(2) {
+                        println!("Node index: {}", node_index);
+                        dbg!(node);
+                    }
                 }
             }
         }
@@ -192,10 +191,11 @@ pub fn s_input(
 pub fn s_move_goal_point(
     mut goal_point_query: Query<&mut Transform, With<GoalPoint>>,
     input_dir: Res<InputDir>,
-    mut pathfinding: ResMut<PathfindingGraph>,
+    mut _pathfinding: ResMut<PathfindingGraph>,
 ) {
-    let mut goal_point_transform = goal_point_query.single_mut();
-    goal_point_transform.translation += (input_dir.dir * 4.0).extend(0.0);
+    if let Ok(mut goal_point_transform) = goal_point_query.single_mut() {
+        goal_point_transform.translation += (input_dir.dir * 4.0).extend(0.0);
+    }
 
     // if pathfinding.active {
     //     // Set the closest node to the node closest to the goal point
@@ -218,8 +218,8 @@ pub fn s_render(
     level: Res<Level>,
     pursue_ai_query: Query<(&Transform, &Physics, &PursueAI)>,
     goal_point_query: Query<&Transform, With<GoalPoint>>,
-    pathfinding: Res<PathfindingGraph>,
-    gizmos_visible: Res<GizmosVisible>,
+    _pathfinding: Res<PathfindingGraph>,
+    _gizmos_visible: Res<GizmosVisible>,
 ) {
     // Draw the level polygons
     for polygon_index in 0..level.polygons.len() {
@@ -232,11 +232,20 @@ pub fn s_render(
     }
 
     // Draw the goal point
-    let goal_point_transform = goal_point_query.single();
-    gizmos.circle_2d(goal_point_transform.translation.xy(), 7.5, Color::GREEN);
+    if let Ok(goal_point_transform) = goal_point_query.single() {
+        gizmos.circle_2d(
+            goal_point_transform.translation.xy(),
+            7.5,
+            Color::srgb(0.0, 1.0, 0.0),
+        );
+    }
 
     // Draw the AI
-    for (transform, physics, pursue_ai) in pursue_ai_query.iter() {
-        gizmos.circle_2d(transform.translation.xy(), physics.radius, Color::RED);
+    for (transform, physics, _pursue_ai) in pursue_ai_query.iter() {
+        gizmos.circle_2d(
+            transform.translation.xy(),
+            physics.radius,
+            Color::srgb(1.0, 0.0, 0.0),
+        );
     }
 }

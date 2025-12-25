@@ -5,7 +5,7 @@ use bevy::{
     app::{App, Plugin, Update},
     ecs::{
         component::Component,
-        schedule::IntoSystemConfigs,
+        schedule::IntoScheduleConfigs,
         system::{Query, ResMut},
     },
     transform::components::Transform,

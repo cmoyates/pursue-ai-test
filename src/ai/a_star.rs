@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::BinaryHeap};
+use std::{cmp::Ordering, collections::{BinaryHeap, HashMap, HashSet}};
 
 use bevy::math::Vec2;
 
@@ -9,13 +9,22 @@ pub fn find_path(
     start_position: Vec2,
     goal_position: Vec2,
 ) -> Option<Vec<PathNode>> {
-    let goal_node = get_goal_node(pathfinding, goal_position)?;
+    let goal_node_id = get_goal_node_id(pathfinding, goal_position)?;
+    let start_node_id = get_start_node_id(pathfinding, start_position, goal_position)?;
+
+    // Early termination: if start == goal, return empty path
+    if start_node_id == goal_node_id {
+        return Some(vec![]);
+    }
 
     let mut open_list: BinaryHeap<AStarNode> = BinaryHeap::new();
-    let mut closed_list: Vec<AStarNode> = vec![];
+    let mut closed_set: HashSet<usize> = HashSet::new();
+    let mut came_from: HashMap<usize, (usize, Vec2)> = HashMap::new(); // node_id -> (parent_id, position)
 
     // Get the start node
-    let start_node = get_start_node(pathfinding, start_position, goal_position);
+    let start_graph_node = &pathfinding.nodes[start_node_id];
+    let mut start_node = AStarNode::new(start_graph_node);
+    start_node.h_cost = (goal_position - start_node.position).length();
 
     // Add the start node to the open list
     open_list.push(start_node);
@@ -29,15 +38,27 @@ pub fn find_path(
         // Get the node with the lowest f-cost
         let current_node = open_list.pop().unwrap();
 
+        // If the node is in the closed set, skip it
+        if closed_set.contains(&current_node.id) {
+            continue;
+        }
+
+        // Store parent information for path reconstruction (before checking if goal)
+        // Store: node_id -> (parent_id, node_position) so we can reconstruct the path
+        if let Some(parent_id) = current_node.parent {
+            came_from.insert(current_node.id, (parent_id, current_node.position));
+        }
+
         // If the current node is the goal, reconstruct the path
-        if current_node.id == goal_node.id {
+        if current_node.id == goal_node_id {
             let mut path: Vec<PathNode> = vec![];
 
-            let mut current_node = current_node;
-            while let Some(parent_id) = current_node.parent {
-                let parent_node = closed_list.iter().find(|n| n.id == parent_id).unwrap();
-                path.push(PathNode::new(parent_id, parent_node.position));
-                current_node = parent_node.clone();
+            let mut current_id = current_node.id;
+            while let Some((parent_id, _)) = came_from.get(&current_id) {
+                // Get the parent's position from the graph
+                let parent_position = pathfinding.nodes[*parent_id].position;
+                path.push(PathNode::new(*parent_id, parent_position));
+                current_id = *parent_id;
             }
 
             path.reverse();
@@ -45,27 +66,30 @@ pub fn find_path(
             return Some(path);
         }
 
-        // If the node is in the closed list, skip it
-        if closed_list.iter().any(|n| n.id == current_node.id) {
-            continue;
-        }
-
-        // Add the current node to the closed list
-        closed_list.push(current_node.clone());
+        // Add the current node to the closed set
+        closed_set.insert(current_node.id);
 
         // For each connection of the current node
-        for connection in current_node.connections.iter() {
-            let connected_graph_node = &pathfinding.nodes[connection.node_id];
+        let current_graph_node = &pathfinding.nodes[current_node.id];
+        for connection in current_graph_node.walkable_connections
+            .iter()
+            .chain(current_graph_node.jumpable_connections.iter())
+        {
+            let connected_node_id = connection.node_id;
+
+            // Skip if already in closed set
+            if closed_set.contains(&connected_node_id) {
+                continue;
+            }
+
+            let connected_graph_node = &pathfinding.nodes[connected_node_id];
             let mut new_node = AStarNode::new(connected_graph_node);
 
-            // If the new node is the goal, set the is_goal flag
-            if new_node.id != goal_node.id {
-                // Set the g-cost to the distance to the start node
-                new_node.g_cost = connection.dist + current_node.g_cost;
+            // Set the g-cost to the distance to the start node
+            new_node.g_cost = connection.dist + current_node.g_cost;
 
-                // Set the h-cost to the distance to the goal
-                new_node.h_cost = (goal_position - new_node.position).length();
-            }
+            // Set the h-cost to the distance to the goal
+            new_node.h_cost = (goal_position - new_node.position).length();
 
             // Set the parent of the new node
             new_node.parent = Some(current_node.id);
@@ -75,26 +99,15 @@ pub fn find_path(
     }
 }
 
-fn get_start_node(
+fn get_start_node_id(
     pathfinding: &PathfindingGraph,
     start_position: Vec2,
     goal_position: Vec2,
-) -> AStarNode {
-    let mut start_graph_node: PathfindingGraphNode = PathfindingGraphNode {
-        id: 0,
-        position: Vec2::ZERO,
-        polygon_index: 0,
-        line_indicies: vec![],
-        walkable_connections: vec![],
-        jumpable_connections: vec![],
-        droppable_connections: vec![],
-        normal: Vec2::ZERO,
-        is_corner: false,
-        is_external_corner: None,
-    };
+) -> Option<usize> {
+    let mut start_node_id: Option<usize> = None;
     let mut start_graph_node_distance = f32::MAX;
 
-    for node in pathfinding.nodes.iter() {
+    for (node_index, node) in pathfinding.nodes.iter().enumerate() {
         let distance = (start_position - node.position).length_squared();
 
         if distance > start_graph_node_distance {
@@ -102,50 +115,47 @@ fn get_start_node(
         }
 
         if distance == start_graph_node_distance {
-            let start_node_to_goal = (goal_position - start_position).length_squared();
-            let current_node_to_goal = (goal_position - node.position).length_squared();
+            if let Some(existing_id) = start_node_id {
+                let existing_node = &pathfinding.nodes[existing_id];
+                let existing_node_to_goal = (goal_position - existing_node.position).length_squared();
+                let current_node_to_goal = (goal_position - node.position).length_squared();
 
-            if current_node_to_goal > start_node_to_goal {
-                continue;
+                if current_node_to_goal > existing_node_to_goal {
+                    continue;
+                }
             }
         }
 
         start_graph_node_distance = distance;
-        start_graph_node = node.clone();
+        start_node_id = Some(node_index);
     }
 
-    let mut start_a_star_node = AStarNode::new(&start_graph_node);
-
-    // Set the h-cost to the distance to the goal
-    start_a_star_node.h_cost = (goal_position - start_a_star_node.position).length();
-
-    start_a_star_node
+    start_node_id
 }
 
-fn get_goal_node(
+fn get_goal_node_id(
     pathfinding: &PathfindingGraph,
     goal_position: Vec2,
-) -> Option<PathfindingGraphNode> {
-    let mut goal_graph_node: Option<PathfindingGraphNode> = None;
+) -> Option<usize> {
+    let mut goal_node_id: Option<usize> = None;
     let mut closest_distance = f32::MAX;
-    for node_index in 0..pathfinding.nodes.len() {
-        let node = &pathfinding.nodes[node_index];
-
+    for (node_index, node) in pathfinding.nodes.iter().enumerate() {
         let distance = (goal_position - node.position).length_squared();
 
         if distance < closest_distance {
             closest_distance = distance;
-            goal_graph_node = Some(node.clone());
+            goal_node_id = Some(node_index);
         }
     }
 
-    goal_graph_node
+    goal_node_id
 }
 
 #[derive(Clone, Debug)]
 pub struct AStarNode {
     pub position: Vec2,
     pub id: usize,
+    #[allow(dead_code)]
     pub connections: Vec<PathfindingGraphConnection>,
     pub g_cost: f32,
     pub h_cost: f32,

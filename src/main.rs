@@ -26,6 +26,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.0, 0.0, 0.0)))
         .insert_resource(InputDir { dir: Vec2::ZERO })
         .insert_resource(GizmosVisible { visible: false })
+        .insert_resource(GoalEnabled { enabled: true })
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Pursue AI Test".to_string(),
@@ -49,6 +50,7 @@ fn main() {
                 s_handle_reset,
                 s_handle_goal_point_input,
                 s_handle_gizmo_toggle,
+                s_handle_goal_toggle,
                 s_handle_pathfinding_debug,
             ),
         )
@@ -65,6 +67,11 @@ pub struct InputDir {
 #[derive(Resource)]
 pub struct GizmosVisible {
     pub visible: bool,
+}
+
+#[derive(Resource)]
+pub struct GoalEnabled {
+    pub enabled: bool,
 }
 
 #[derive(Component)]
@@ -127,6 +134,7 @@ pub fn s_init(mut commands: Commands, pathfinding: ResMut<PathfindingGraph>) {
         },
         PursueAI {
             state: PursueAIState::Wander,
+            current_wander_goal: None,
         },
     ));
 }
@@ -194,6 +202,16 @@ pub fn s_handle_gizmo_toggle(
     }
 }
 
+pub fn s_handle_goal_toggle(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut goal_enabled: ResMut<GoalEnabled>,
+) {
+    // Space to toggle goal
+    if keyboard_input.just_pressed(KeyCode::Space) {
+        goal_enabled.enabled = !goal_enabled.enabled;
+    }
+}
+
 pub fn s_handle_pathfinding_debug(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     q_windows: Query<&Window, With<PrimaryWindow>>,
@@ -237,6 +255,7 @@ pub fn s_render(
     level: Res<Level>,
     pursue_ai_query: Query<(&Transform, &Physics, &PursueAI)>,
     goal_point_query: Query<&Transform, With<GoalPoint>>,
+    goal_enabled: Res<GoalEnabled>,
 ) {
     // Draw the level polygons
     for polygon_index in 0..level.polygons.len() {
@@ -245,12 +264,17 @@ pub fn s_render(
         gizmos.linestrip_2d(polygon.points.to_vec(), polygon.color);
     }
 
-    // Draw the goal point
+    // Draw the goal point (greyed out when disabled, green when enabled)
     if let Ok(goal_point_transform) = goal_point_query.single() {
+        let color = if goal_enabled.enabled {
+            Color::srgb(0.0, 1.0, 0.0) // Green when enabled
+        } else {
+            Color::srgb(0.5, 0.5, 0.5) // Grey when disabled
+        };
         gizmos.circle_2d(
             goal_point_transform.translation.xy(),
             GOAL_POINT_RADIUS,
-            Color::srgb(0.0, 1.0, 0.0),
+            color,
         );
     }
 

@@ -35,6 +35,7 @@ impl Plugin for PursueAIPlugin {
 #[derive(Component)]
 pub struct PursueAI {
     pub state: PursueAIState,
+    pub current_wander_goal: Option<usize>,
 }
 
 pub fn s_pursue_ai_update(

@@ -12,11 +12,12 @@ use bevy::{
     transform::components::Transform,
 };
 
-use crate::{s_move_goal_point, GizmosVisible, GoalPoint, Physics, GRAVITY_STRENGTH};
+use crate::{s_move_goal_point, GizmosVisible, GoalEnabled, GoalPoint, Physics, GRAVITY_STRENGTH};
 
 use super::{
     a_star::{find_path, PathNode},
     pathfinding::PathfindingGraph,
+    pursue_ai::s_pursue_ai_update,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -58,7 +59,12 @@ pub struct PlatformerAIPlugin;
 
 impl Plugin for PlatformerAIPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, s_platformer_ai_movement.after(s_move_goal_point));
+        app.add_systems(
+            Update,
+            s_platformer_ai_movement
+                .after(s_move_goal_point)
+                .after(s_pursue_ai_update),
+        );
     }
 }
 
@@ -74,20 +80,36 @@ pub struct PlatformerAI {
 }
 
 pub fn s_platformer_ai_movement(
-    mut platformer_ai_query: Query<(&mut Transform, &mut Physics, &mut PlatformerAI)>,
+    mut platformer_ai_query: Query<
+        (&mut Transform, &mut Physics, &mut PlatformerAI, &crate::ai::pursue_ai::PursueAI),
+    >,
     pathfinding: Res<PathfindingGraph>,
     gismo_visible: Res<GizmosVisible>,
     goal_point_query: Query<&Transform, (With<GoalPoint>, Without<PlatformerAI>)>,
+    goal_enabled: Res<GoalEnabled>,
     mut gizmos: Gizmos,
 ) {
-    // Get goal point position, default to (0, 0) if not found
-    let goal_position = goal_point_query
-        .single()
-        .ok()
-        .map(|t| t.translation.xy())
-        .unwrap_or(Vec2::ZERO);
-
-    for (mut transform, mut physics, mut platformer_ai) in platformer_ai_query.iter_mut() {
+    for (mut transform, mut physics, mut platformer_ai, pursue_ai) in platformer_ai_query.iter_mut() {
+        // Get goal point position
+        let goal_position = if goal_enabled.enabled {
+            // When goal is enabled, use the goal point position
+            goal_point_query
+                .single()
+                .ok()
+                .map(|t| t.translation.xy())
+                .unwrap_or(Vec2::ZERO)
+        } else {
+            // When goal is disabled, check for wander goal
+            if let Some(wander_node_id) = pursue_ai.current_wander_goal {
+                if let Some(wander_node) = pathfinding.nodes.get(wander_node_id) {
+                    wander_node.position
+                } else {
+                    Vec2::ZERO
+                }
+            } else {
+                Vec2::ZERO
+            }
+        };
         let (move_dir, jump_velocity, jump_from_node, jump_to_node) = get_move_inputs(
             pathfinding.as_ref(),
             transform.translation.xy(),

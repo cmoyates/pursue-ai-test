@@ -9,6 +9,11 @@ use crate::{level::Level, utils::line_intersect, GRAVITY_STRENGTH};
 
 use super::{platformer_ai::PLATFORMER_AI_JUMP_FORCE, pursue_ai::PURSUE_AI_AGENT_RADIUS};
 
+// Pathfinding constants
+const PATHFINDING_NODE_SPACING: f32 = 20.0;
+const PATHFINDING_NODE_DIRECTION_THRESHOLD: f32 = -0.1;
+const JUMPABILITY_CHECK_TIMESTEP_DIVISIONS: i32 = 10;
+
 pub struct PathfindingPlugin;
 
 impl Plugin for PathfindingPlugin {
@@ -31,8 +36,6 @@ pub fn init_pathfinding_graph(level: &Level, mut pathfinding: ResMut<Pathfinding
     calculate_normals(&mut pathfinding, level);
 
     setup_corners(&mut pathfinding);
-
-    // make_droppable_connections(&mut pathfinding, level);
 }
 
 #[derive(Debug, Clone)]
@@ -91,12 +94,12 @@ pub fn place_nodes(pathfinding: &mut PathfindingGraph, level: &Level) {
 
             let length = start_to_end.length();
 
-            let nodes_on_line_count = (length.abs() / 20.0).ceil();
+            let nodes_on_line_count = (length.abs() / PATHFINDING_NODE_SPACING).ceil();
             let dist_between_nodes_on_line = length / nodes_on_line_count;
 
             start_to_end = start_to_end.normalize();
 
-            if start_to_end.dot(Vec2::X) > -0.1 {
+            if start_to_end.dot(Vec2::X) > PATHFINDING_NODE_DIRECTION_THRESHOLD {
                 for j in 0..(nodes_on_line_count as i32) {
                     let node_pos = start + start_to_end * (j as f32 * dist_between_nodes_on_line);
 
@@ -327,7 +330,7 @@ pub fn jumpability_check(
         .sqrt()
         .sqrt();
     let launch_velocity = delta_p / t_low_energy - acceleration * t_low_energy / 2.0;
-    let timestep = t_low_energy / 10_f32;
+    let timestep = t_low_energy / JUMPABILITY_CHECK_TIMESTEP_DIVISIONS as f32;
 
     if jump_possible {
         'polygon: for polygon_index in 0..level.polygons.len() {
@@ -347,7 +350,7 @@ pub fn jumpability_check(
 
                 let mut prev_pos = start_pos;
 
-                for i in 1..10 {
+                for i in 1..=JUMPABILITY_CHECK_TIMESTEP_DIVISIONS {
                     let t = timestep * i as f32;
                     let pos = start_pos + launch_velocity * t + acceleration * t * t / 2.0;
 
@@ -470,37 +473,3 @@ pub fn setup_corners(pathfinding: &mut PathfindingGraph) {
         }
     }
 }
-
-// pub fn make_droppable_connections(pathfinding: &mut Pathfinding, level: &Level) {
-//     // For each node
-
-//     for i in 0..pathfinding.nodes.len() {
-//         let node = &pathfinding.nodes[i];
-
-//         if node.normal.y > 0.1 {
-//             continue;
-//         }
-
-//         let mut droppable_connections: Vec<usize> = Vec::new();
-
-//         // Boxcast down
-
-//         // // For each line in the level
-//         // for polygon_index in 0..level.polygons.len() {
-//         //     let polygon = &level.polygons[polygon_index];
-
-//         //     for line_index in 1..polygon.points.len() {
-//         //         let start = polygon.points[line_index - 1];
-//         //         let end = polygon.points[line_index];
-
-//         //         // If the boxcast hits a node below, add it to the droppable connections
-//         //     }
-//         // }
-
-//         // If the boxcast hits a node below, add it to the droppable connections
-//     }
-
-//     // Boxcast down
-
-//     // If the boxcast hits a node below, add it to the droppable connections
-// }

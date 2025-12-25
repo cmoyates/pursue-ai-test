@@ -3,6 +3,10 @@ use rand::prelude::*;
 
 use crate::utils::line_intersect;
 
+// Level generation constants
+const POINT_IN_POLYGON_RAY_DIRECTION: Vec2 = Vec2::new(2.0, 1.0);
+const POINT_IN_POLYGON_RAY_DISTANCE: f32 = 1000.0;
+
 pub struct Polygon {
     pub points: Vec<Vec2>,
     pub color: Color,
@@ -128,7 +132,6 @@ pub fn generate_level_polygons(grid_size: f32) -> (Vec<Polygon>, Vec2, Vec2) {
 
         // If there is a point to remove
         if let Some(point_removal_data) = point_removal_data {
-
             // Store the unique vertices
             let unique_vert_1 = line_points[point_removal_data.1 .0];
             let unique_vert_2 = line_points[point_removal_data.1 .1];
@@ -280,7 +283,7 @@ fn calculate_winding_order(vertices: &[Vec2]) -> f32 {
 
 fn point_in_polygon(polygon_lines: &[Vec2], point: Vec2) -> bool {
     let test_line_start = point;
-    let test_line_end = point + Vec2::new(2.0, 1.0) * 1000.0;
+    let test_line_end = point + POINT_IN_POLYGON_RAY_DIRECTION * POINT_IN_POLYGON_RAY_DISTANCE;
 
     let mut intersect_counter = 0;
 

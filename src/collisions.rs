@@ -4,20 +4,25 @@ use bevy::{
         schedule::IntoScheduleConfigs,
         system::{Query, Res},
     },
-    gizmos::gizmos::Gizmos,
     math::{Vec2, Vec3Swizzles},
     transform::components::Transform,
 };
 
 use crate::{
-    ai::{
-        platformer_ai::s_platformer_ai_movement,
-        pursue_ai::PursueAI,
-    },
+    ai::{platformer_ai::s_platformer_ai_movement, pursue_ai::PursueAI},
     level::Level,
     utils::{line_intersect, side_of_line_detection},
     Physics,
 };
+
+// Collision detection constants
+const RAYCAST_DIRECTION_SCALE: Vec2 = Vec2::new(2.0, 1.0);
+const RAYCAST_DISTANCE: f32 = 10000.0;
+const TOUCH_RADIUS_OFFSET: f32 = 0.5;
+const GROUND_NORMAL_THRESHOLD: f32 = -0.01;
+const WALL_NORMAL_THRESHOLD: f32 = 0.8;
+const CEILING_NORMAL_THRESHOLD: f32 = -0.01;
+const GROUND_DETECTION_THRESHOLD: f32 = 0.01;
 
 pub struct CollisionPlugin;
 
@@ -30,7 +35,6 @@ impl Plugin for CollisionPlugin {
 pub fn s_collision(
     mut entity_query: Query<(&mut Transform, &mut Physics, &mut PursueAI)>,
     level: Res<Level>,
-    _gizmos: Gizmos,
 ) {
     if let Ok((mut transform, mut physics, mut _platformer_ai)) = entity_query.single_mut() {
         let mut adjustment = Vec2::ZERO;
@@ -52,7 +56,7 @@ pub fn s_collision(
                         start,
                         end,
                         transform.translation.xy(),
-                        transform.translation.xy() + Vec2::new(2.0, 1.0) * 10000.0,
+                        transform.translation.xy() + RAYCAST_DIRECTION_SCALE * RAYCAST_DISTANCE,
                     );
 
                     if intersection.is_some() {
@@ -73,7 +77,7 @@ pub fn s_collision(
                 let colliding_with_line = distance_sq <= physics.radius.powi(2);
                 colliding_with_polygon = colliding_with_polygon || colliding_with_line;
 
-                let touch_radius = physics.radius + 0.5;
+                let touch_radius = physics.radius + TOUCH_RADIUS_OFFSET;
 
                 let touching_line = distance_sq <= touch_radius.powi(2);
 
@@ -81,25 +85,21 @@ pub fn s_collision(
                     let normal_dir = (transform.translation.xy() - projection).normalize_or_zero();
 
                     // If the line is not above the agent
-                    if normal_dir.y >= -0.01 {
+                    if normal_dir.y >= GROUND_NORMAL_THRESHOLD {
                         // Add the normal dir to the agents new normal
                         new_normal -= normal_dir;
 
                         // If the agent is on a wall
-                        if normal_dir.x.abs() >= 0.8 {
+                        if normal_dir.x.abs() >= WALL_NORMAL_THRESHOLD {
                             physics.walled = normal_dir.x.signum() as i8;
                             physics.has_wall_jumped = false;
                             physics.grounded = false;
-                            // platformer_ai.jump_from_pos = None;
-                            // platformer_ai.jump_to_pos = None;
                         }
                         // If the agent is on the ground
-                        else if normal_dir.y > 0.01 {
+                        else if normal_dir.y > GROUND_DETECTION_THRESHOLD {
                             physics.grounded = true;
                             physics.walled = 0;
                             physics.has_wall_jumped = false;
-                            // platformer_ai.jump_from_pos = None;
-                            // platformer_ai.jump_to_pos = None;
                         }
                     }
                 }
@@ -107,8 +107,7 @@ pub fn s_collision(
                 if colliding_with_line {
                     let mut delta = (transform.translation.xy() - projection).normalize_or_zero();
 
-                    if delta.y < -0.01 {
-                        // println!("Hit ceiling");
+                    if delta.y < CEILING_NORMAL_THRESHOLD {
                         physics.velocity.y = 0.0;
                     }
 

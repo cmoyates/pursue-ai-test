@@ -6,7 +6,7 @@ use bevy::{
     ecs::{
         component::Component,
         schedule::IntoScheduleConfigs,
-        system::{Query, ResMut},
+        system::{Query, Res},
     },
     transform::components::Transform,
 };
@@ -39,7 +39,7 @@ pub struct PursueAI {
 
 pub fn s_pursue_ai_update(
     mut platformer_ai_query: Query<(&mut Transform, &mut Physics, &mut PursueAI)>,
-    mut pathfinding: ResMut<PathfindingGraph>,
+    pathfinding: Res<PathfindingGraph>,
 ) {
     for (mut transform, mut physics, mut pursue_ai) in platformer_ai_query.iter_mut() {
         let next_state: Option<PursueAIState> = match pursue_ai.state {
@@ -47,7 +47,7 @@ pub fn s_pursue_ai_update(
                 &mut transform,
                 &mut physics,
                 &mut pursue_ai,
-                &mut pathfinding,
+                pathfinding.as_ref(),
             ),
             // PursueAIState::Pursue => {}
             // PursueAIState::Search => {}

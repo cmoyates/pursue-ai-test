@@ -1,9 +1,5 @@
 use bevy::math::Vec2;
 
-// pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
-//     a + (b - a) * t
-// }
-
 pub fn line_intersect(
     line_1_start: Vec2,
     line_1_end: Vec2,

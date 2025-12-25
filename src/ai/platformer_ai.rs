@@ -38,6 +38,12 @@ pub const PLATFORMER_AI_JUMP_FORCE: f32 = 8.0;
 
 pub const ACCELERATION_SCALERS: (f32, f32) = (0.2, 0.4);
 
+// Platformer AI movement constants
+const GIZMO_LINE_LENGTH: f32 = 15.0;
+const VELOCITY_MAGNITUDE_THRESHOLD: f32 = 0.1;
+const JUMP_TIME_MULTIPLIER: f32 = 1.0;
+const PATHFINDING_NODE_GIZMO_RADIUS: f32 = 5.0;
+
 #[allow(dead_code)]
 pub struct PlatformerAIPlugin;
 
@@ -73,7 +79,7 @@ pub fn s_platformer_ai_movement(
         if gismo_visible.visible {
             gizmos.line_2d(
                 transform.translation.xy(),
-                transform.translation.xy() + move_dir * 15.0,
+                transform.translation.xy() + move_dir * GIZMO_LINE_LENGTH,
                 Color::srgb(1.0, 0.0, 0.0),
             );
         }
@@ -148,13 +154,15 @@ fn get_move_inputs(
         if gizmos_visible {
             let mut prev_pos = agent_position;
             for node in &path {
-                gizmos.circle_2d(node.position, 5.0, Color::srgb(0.0, 1.0, 0.0));
+                gizmos.circle_2d(
+                    node.position,
+                    PATHFINDING_NODE_GIZMO_RADIUS,
+                    Color::srgb(0.0, 1.0, 0.0),
+                );
                 gizmos.line_2d(prev_pos, node.position, Color::srgb(0.0, 1.0, 0.0));
 
                 prev_pos = node.position;
             }
-
-            // gizmos.line_2d(prev_pos, pathfinding.goal_position, Color::srgb(0.0, 1.0, 0.0));
         }
 
         if path.len() > 1 {
@@ -189,7 +197,8 @@ fn get_move_inputs(
                         agent_on_wall,
                     );
 
-                    let agent_not_moving = agent_physics.velocity.length_squared() < 0.1;
+                    let agent_not_moving =
+                        agent_physics.velocity.length_squared() < VELOCITY_MAGNITUDE_THRESHOLD;
 
                     path_following_strategy = if agent_on_other_side_next_frame || agent_not_moving
                     {
@@ -253,7 +262,7 @@ fn get_move_inputs(
             {
                 let node_position_delta = path[1].position - path[0].position;
                 let gravity_acceleration = Vec2::new(0.0, -GRAVITY_STRENGTH);
-                let jump_time = 1.0
+                let jump_time = JUMP_TIME_MULTIPLIER
                     * (4.0 * node_position_delta.dot(node_position_delta)
                         / gravity_acceleration.dot(gravity_acceleration))
                     .sqrt()
@@ -291,24 +300,10 @@ fn apply_movement_acceleration(
             // Acceleration
             ACCELERATION_SCALERS.0
         };
-
-    // // Unless the player is on a wall and is trying to move away from it
-    // if !player_move_off_wall {
-    //     // Remove the acceleration in the direction of the normal
-    //     let acceleration_adjustment =
-    //         player_physics.normal * player_physics.acceleration.dot(player_physics.normal);
-    //     player_physics.acceleration -= acceleration_adjustment;
-    // }
 }
 
-fn apply_gravity_toward_normal(
-    physics: &mut Physics,
-    falling: bool,
-    // player_move_off_wall: bool,
-) {
-    if
-    /*player_move_off_wall || */
-    falling {
+fn apply_gravity_toward_normal(physics: &mut Physics, falling: bool) {
+    if falling {
         physics.acceleration.y = -GRAVITY_STRENGTH;
     } else {
         let gravity_normal_dir = physics.normal * GRAVITY_STRENGTH;

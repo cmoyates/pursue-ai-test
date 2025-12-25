@@ -17,18 +17,21 @@ use super::PursueAI;
 #[allow(dead_code)]
 pub const WANDER_MAX_SPEED: f32 = 3.0;
 
+// Wander AI constants
+const WANDER_SAMPLE_COUNT: usize = 3;
+
 pub fn wander_update(
     transform: &mut Transform,
     _physics: &mut Physics,
     _pursue_ai: &mut PursueAI,
-    pathfinding: &mut PathfindingGraph,
+    pathfinding: &PathfindingGraph,
 ) -> Option<PursueAIState> {
     wander_movement(transform, pathfinding);
 
     None
 }
 
-pub fn wander_movement(transform: &mut Transform, pathfinding: &mut PathfindingGraph) {
+pub fn wander_movement(transform: &mut Transform, pathfinding: &PathfindingGraph) {
     // Pick a random goal point
     let _goal_node = get_random_goal_node(transform.translation.xy(), pathfinding);
 
@@ -40,15 +43,14 @@ pub fn wander_movement(transform: &mut Transform, pathfinding: &mut PathfindingG
 
 pub fn get_random_goal_node(
     agent_position: Vec2,
-    pathfinding: &mut PathfindingGraph,
+    pathfinding: &PathfindingGraph,
 ) -> PathfindingGraphNode {
-    let sample_count = 3;
     let pathfinding_node_count = pathfinding.nodes.len();
 
     let mut furthest_node: Option<PathfindingGraphNode> = None;
     let mut furthest_node_distance_sq: f32 = f32::MAX;
 
-    for _ in 0..sample_count {
+    for _ in 0..WANDER_SAMPLE_COUNT {
         let random_node_index = rand::rng().random_range(0..pathfinding_node_count);
         let random_node = &pathfinding.nodes[random_node_index];
 

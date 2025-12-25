@@ -18,6 +18,11 @@ use level::{generate_level_polygons, Level};
 
 pub const GRAVITY_STRENGTH: f32 = 0.5;
 
+// Goal point movement constants
+const GOAL_POINT_MOVE_SPEED: f32 = 4.0;
+const GOAL_POINT_RADIUS: f32 = 7.5;
+const PATHFINDING_NODE_CLICK_RADIUS: f32 = 3.5;
+
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.0, 0.0, 0.0)))
@@ -40,7 +45,17 @@ fn main() {
         // Startup systems
         .add_systems(Startup, s_init)
         // Update systems
-        .add_systems(Update, (s_input, s_move_goal_point).chain())
+        .add_systems(
+            Update,
+            (
+                s_handle_exit,
+                s_handle_reset,
+                s_handle_goal_point_input,
+                s_handle_gizmo_toggle,
+                s_handle_pathfinding_debug,
+            ),
+        )
+        .add_systems(Update, s_move_goal_point.after(s_handle_goal_point_input))
         .add_systems(Update, s_render.after(s_collision))
         .run();
 }
@@ -111,23 +126,18 @@ pub fn s_init(mut commands: Commands, pathfinding: ResMut<PathfindingGraph>) {
     ));
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn s_input(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut exit: MessageWriter<AppExit>,
-    mut input_dir: ResMut<InputDir>,
-    mut gizmos_visible: ResMut<GizmosVisible>,
-    mut platformer_ai_query: Query<(&mut Transform, &mut Physics, &mut PlatformerAI)>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
-    q_windows: Query<&Window, With<PrimaryWindow>>,
-    pathfinding: Res<PathfindingGraph>,
-) {
+pub fn s_handle_exit(keyboard_input: Res<ButtonInput<KeyCode>>, mut exit: MessageWriter<AppExit>) {
     // Escape to exit (if not WASM)
     #[cfg(not(target_arch = "wasm32"))]
     if keyboard_input.just_pressed(KeyCode::Escape) {
         exit.write(AppExit::Success);
     }
+}
 
+pub fn s_handle_reset(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut platformer_ai_query: Query<(&mut Transform, &mut Physics, &mut PlatformerAI)>,
+) {
     // R to reset
     if keyboard_input.just_pressed(KeyCode::KeyR) {
         for (mut transform, mut physics, _platformer_ai) in platformer_ai_query.iter_mut() {
@@ -137,36 +147,50 @@ pub fn s_input(
             physics.acceleration = Vec2::ZERO;
         }
     }
+}
 
+pub fn s_handle_goal_point_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut input_dir: ResMut<InputDir>,
+) {
     // Arrow keys to move goal point
-    {
-        let mut direction = Vec2::ZERO;
+    let mut direction = Vec2::ZERO;
 
-        if keyboard_input.pressed(KeyCode::ArrowUp) {
-            direction.y += 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::ArrowDown) {
-            direction.y -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::ArrowLeft) {
-            direction.x -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::ArrowRight) {
-            direction.x += 1.0;
-        }
-
-        // Normalize direction
-        direction = direction.normalize_or_zero();
-
-        // Set direction resource
-        input_dir.dir = direction;
+    if keyboard_input.pressed(KeyCode::ArrowUp) {
+        direction.y += 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::ArrowDown) {
+        direction.y -= 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::ArrowLeft) {
+        direction.x -= 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::ArrowRight) {
+        direction.x += 1.0;
     }
 
+    // Normalize direction
+    direction = direction.normalize_or_zero();
+
+    // Set direction resource
+    input_dir.dir = direction;
+}
+
+pub fn s_handle_gizmo_toggle(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut gizmos_visible: ResMut<GizmosVisible>,
+) {
     // G to toggle gizmos
     if keyboard_input.just_pressed(KeyCode::KeyG) {
         gizmos_visible.visible = !gizmos_visible.visible;
     }
+}
 
+pub fn s_handle_pathfinding_debug(
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    q_windows: Query<&Window, With<PrimaryWindow>>,
+    pathfinding: Res<PathfindingGraph>,
+) {
     // Print some debug info if you click on a pathfinding node
     if mouse_buttons.just_pressed(MouseButton::Left) {
         if let Ok(window) = q_windows.single() {
@@ -180,7 +204,9 @@ pub fn s_input(
                 for node_index in 0..pathfinding.nodes.len() {
                     let node = &pathfinding.nodes[node_index];
 
-                    if (mouse_pos_world - node.position).length_squared() < (3.5_f32).powi(2) {
+                    if (mouse_pos_world - node.position).length_squared()
+                        < PATHFINDING_NODE_CLICK_RADIUS.powi(2)
+                    {
                         println!("Node index: {}", node_index);
                         dbg!(node);
                     }
@@ -189,29 +215,14 @@ pub fn s_input(
         }
     }
 }
+
 pub fn s_move_goal_point(
     mut goal_point_query: Query<&mut Transform, With<GoalPoint>>,
     input_dir: Res<InputDir>,
-    mut _pathfinding: ResMut<PathfindingGraph>,
 ) {
     if let Ok(mut goal_point_transform) = goal_point_query.single_mut() {
-        goal_point_transform.translation += (input_dir.dir * 4.0).extend(0.0);
+        goal_point_transform.translation += (input_dir.dir * GOAL_POINT_MOVE_SPEED).extend(0.0);
     }
-
-    // if pathfinding.active {
-    //     // Set the closest node to the node closest to the goal point
-    //     let mut closest_distance = f32::MAX;
-    //     for node_index in 0..pathfinding.nodes.len() {
-    //         let node = &pathfinding.nodes[node_index];
-
-    //         let distance = (pathfinding.goal_position - node.position).length_squared();
-
-    //         if distance < closest_distance {
-    //             closest_distance = distance;
-    //             pathfinding.goal_graph_node = Some(node.clone());
-    //         }
-    //     }
-    // }
 }
 
 pub fn s_render(
@@ -219,8 +230,6 @@ pub fn s_render(
     level: Res<Level>,
     pursue_ai_query: Query<(&Transform, &Physics, &PursueAI)>,
     goal_point_query: Query<&Transform, With<GoalPoint>>,
-    _pathfinding: Res<PathfindingGraph>,
-    _gizmos_visible: Res<GizmosVisible>,
 ) {
     // Draw the level polygons
     for polygon_index in 0..level.polygons.len() {
@@ -233,7 +242,7 @@ pub fn s_render(
     if let Ok(goal_point_transform) = goal_point_query.single() {
         gizmos.circle_2d(
             goal_point_transform.translation.xy(),
-            7.5,
+            GOAL_POINT_RADIUS,
             Color::srgb(0.0, 1.0, 0.0),
         );
     }

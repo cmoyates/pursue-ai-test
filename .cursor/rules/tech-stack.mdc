@@ -1,0 +1,294 @@
+---
+description: Application tech stack, dependency versions, and best practices
+globs: **/*
+alwaysApply: true
+---
+
+# Tech Stack and Dependencies
+
+This document outlines the technology stack, dependency versions, and best practices for the Pursue AI Test project.
+
+## Application Stack
+
+### Core Framework
+
+- **Bevy 0.13.0** - Modern data-driven game engine built in Rust
+  - Uses ECS (Entity Component System) architecture
+  - Provides rendering, windowing, input handling, and plugin system
+  - Supports 2D and 3D game development
+
+### Rust Edition
+
+- **Rust Edition 2021** - Modern Rust edition with improved features and syntax
+
+## Dependencies
+
+### Bevy 0.13.0
+
+**Purpose**: Game engine and ECS framework
+
+**Usage in Project**:
+
+- ECS architecture: Components, Resources, Systems, Plugins
+- Window management and rendering
+- Input handling (`ButtonInput<KeyCode>`, `ButtonInput<MouseButton>`)
+- Transform and math utilities (`Vec2`, `Vec3`, `Transform`)
+- Gizmos for debug rendering
+- Diagnostic plugins (`FrameTimeDiagnosticsPlugin`, `LogDiagnosticsPlugin`)
+
+**Best Practices for Bevy 0.13.0**:
+
+1. **System Organization**:
+
+   ```rust
+   // Good: Use system ordering with .after() for explicit dependencies
+   .add_systems(Update, s_move_goal_point.after(s_input))
+   .add_systems(Update, s_render.after(s_collision))
+   ```
+
+2. **Plugin Architecture**:
+
+   ```rust
+   // Good: Encapsulate functionality in plugins
+   pub struct CollisionPlugin;
+   impl Plugin for CollisionPlugin {
+       fn build(&self, app: &mut App) {
+           app.add_systems(Update, s_collision);
+       }
+   }
+   ```
+
+3. **Resource Management**:
+
+   ```rust
+   // Good: Use Resources for global state
+   #[derive(Resource)]
+   pub struct Level {
+       pub polygons: Vec<Polygon>,
+       // ...
+   }
+   ```
+
+4. **Component Design**:
+
+   ```rust
+   // Good: Keep components focused and data-oriented
+   #[derive(Component)]
+   pub struct Physics {
+       pub velocity: Vec2,
+       pub acceleration: Vec2,
+       // ...
+   }
+   ```
+
+5. **Query Patterns**:
+
+   ```rust
+   // Good: Use Query with filters for efficient entity access
+   fn system(mut query: Query<&mut Transform, With<GoalPoint>>) {
+       // ...
+   }
+   ```
+
+6. **Version-Specific Notes**:
+   - Bevy 0.13 uses `ButtonInput` instead of `Input` for input handling
+   - Use `PresentMode::AutoVsync` for VSync control
+   - Diagnostic plugins are available for performance monitoring
+   - Gizmos API is stable for debug rendering
+
+### rand 0.8.5
+
+**Purpose**: Random number generation
+
+**Usage in Project**:
+
+- Random node selection in pathfinding (`rand::thread_rng().gen_range()`)
+- Random color generation for polygons (`rng.gen_range(0.0..=1.0)`)
+
+**Best Practices for rand 0.8.5**:
+
+1. **Thread-Local RNG**:
+
+   ```rust
+   // Good: Use thread_rng() for simple cases
+   let mut rng = rand::thread_rng();
+   let value = rng.gen_range(0..100);
+   ```
+
+2. **Range Syntax**:
+
+   ```rust
+   // Good: Use inclusive ranges with ..=
+   rng.gen_range(0.0..=1.0)  // Inclusive range
+   rng.gen_range(0..100)      // Exclusive range
+   ```
+
+3. **Performance Considerations**:
+
+   - `thread_rng()` is fast but not cryptographically secure (fine for game logic)
+   - For deterministic behavior, use `StdRng` or `SmallRng` with a seed
+   - Avoid creating new RNG instances in hot loops
+
+4. **Version-Specific Notes**:
+   - rand 0.8 uses the `Rng` trait which must be imported
+   - Range syntax changed from `(0, 100)` to `0..100` in 0.8
+
+### serde 1.0.196
+
+**Purpose**: Serialization and deserialization framework
+
+**Features Used**: `["derive"]` - Enables derive macros for `Serialize` and `Deserialize`
+
+**Usage in Project**:
+
+- Currently used indirectly through `serde_json` for level data deserialization
+- Level data loaded from JSON files (`assets/level.json`)
+
+**Best Practices for serde 1.0.196**:
+
+1. **Derive Macros**:
+
+   ```rust
+   // Good: Use derive macros for automatic serialization
+   #[derive(Serialize, Deserialize)]
+   pub struct LevelData {
+       // ...
+   }
+   ```
+
+2. **Feature Management**:
+
+   ```toml
+   # Good: Only enable needed features
+   serde = { version = "1.0.196", features = ["derive"] }
+   ```
+
+3. **Error Handling**:
+
+   ```rust
+   // Good: Handle deserialization errors properly
+   let data: MyType = serde_json::from_str(json_str)
+       .expect("Failed to deserialize");
+   // Better: Use proper error handling
+   let data: Result<MyType, _> = serde_json::from_str(json_str);
+   ```
+
+4. **Version-Specific Notes**:
+   - serde 1.0 is stable and widely compatible
+   - The `derive` feature is essential for automatic trait implementation
+   - Consider using `serde_json` for JSON, `toml` for TOML, etc.
+
+### serde_json 1.0.112
+
+**Purpose**: JSON serialization/deserialization using serde
+
+**Usage in Project**:
+
+- Deserializing level data from JSON files
+- Used with `include_bytes!` macro for compile-time asset inclusion
+
+**Best Practices for serde_json 1.0.112**:
+
+1. **Deserialization Patterns**:
+
+   ```rust
+   // Good: Deserialize directly from string
+   let data: Vec<Vec<usize>> = serde_json::from_str(json_str)?;
+   ```
+
+2. **Asset Loading**:
+
+   ```rust
+   // Good: Use include_bytes! for compile-time asset inclusion
+   const LEVEL_DATA: &'static [u8] = include_bytes!("../assets/level.json");
+   let json_str = std::str::from_utf8(LEVEL_DATA)?;
+   let data: MyType = serde_json::from_str(json_str)?;
+   ```
+
+3. **Error Handling**:
+
+   ```rust
+   // Good: Handle UTF-8 conversion and JSON parsing errors
+   let res = std::str::from_utf8(LEVEL_DATA);
+   let level_data: Vec<Vec<usize>> = serde_json::from_str(&res.unwrap())
+       .expect("Failed to parse level JSON");
+   ```
+
+4. **Version Compatibility**:
+   - serde_json 1.0.112 is compatible with serde 1.0.196
+   - Both follow semantic versioning and are stable
+
+## General Best Practices
+
+### Dependency Management
+
+1. **Version Pinning**:
+
+   - Current approach: Exact versions specified (good for reproducibility)
+   - Consider using caret requirements (`^1.0`) for libraries if you want minor updates
+   - Keep `Cargo.lock` committed for applications
+
+2. **Feature Flags**:
+
+   - Only enable needed features (e.g., `serde` with `["derive"]`)
+   - Reduces compile time and binary size
+
+3. **Regular Updates**:
+
+   - Run `cargo update` periodically to get patch updates
+   - Review breaking changes before major version updates
+   - Use `cargo audit` to check for security vulnerabilities
+
+4. **Dependency Minimization**:
+   - Only add dependencies when necessary
+   - Consider alternatives: std library, smaller crates, or custom implementations
+
+### Build Configuration
+
+1. **Rust Edition**:
+
+   - Using Rust 2021 edition (current stable)
+   - Provides modern syntax and improved error messages
+
+2. **Compile-Time Assets**:
+   - Using `include_bytes!` for level data (good for small assets)
+   - Consider runtime asset loading for larger files or dynamic content
+
+### Code Organization
+
+1. **Module Structure**:
+
+   - Follow Rust module conventions (`mod.rs` files)
+   - Group related functionality (e.g., `ai/` module with submodules)
+
+2. **Bevy Patterns**:
+   - Use plugins to organize systems
+   - Keep systems focused and single-purpose
+   - Use resources for global state, components for entity data
+
+## Version Update Considerations
+
+When updating dependencies:
+
+1. **Bevy Updates**:
+
+   - Bevy has frequent breaking changes between minor versions
+   - Review migration guides: https://bevyengine.org/learn/migration-guides/
+   - Test thoroughly after updates
+
+2. **serde/serde_json Updates**:
+
+   - Generally backward compatible within major versions
+   - Check changelog for any breaking changes
+
+3. **rand Updates**:
+   - rand 0.8 is stable
+   - Consider rand 0.9+ for new projects (but test compatibility)
+
+## References
+
+- [Bevy Documentation](https://bevyengine.org/learn/)
+- [Bevy 0.13 Migration Guide](https://bevyengine.org/learn/migration-guides/0.12-to-0.13/)
+- [serde Documentation](https://serde.rs/)
+- [rand Documentation](https://docs.rs/rand/)
+- [Rust Edition Guide](https://doc.rust-lang.org/edition-guide/)

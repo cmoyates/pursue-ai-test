@@ -65,8 +65,8 @@ src/ai/
 
 - **`Cargo.toml`** - Rust project manifest with dependencies:
 
-  - `bevy = "0.13.0"` - Game engine
-  - `rand = "0.8.5"` - Random number generation
+  - `bevy = "0.17.3"` - Game engine
+  - `rand = "0.9"` - Random number generation
   - `serde` - Serialization framework
   - `serde_json` - JSON serialization
 
@@ -99,7 +99,7 @@ src/ai/
 ## Important Notes
 
 1. **Module Organization**: The project follows Rust module conventions with `mod.rs` files serving as module roots
-2. **Bevy Framework**: Uses Bevy 0.13.0 game engine with ECS (Entity Component System) architecture
+2. **Bevy Framework**: Uses Bevy 0.17.3 game engine with ECS (Entity Component System) architecture
 3. **AI State Machine**: The pursue AI implements a state machine with states like Wander, Pursue, Search, and Attack (see README.md)
 4. **Pathfinding**: Uses A\* algorithm for navigation, with a pathfinding graph system
 5. **Build Artifacts**: `target/` directory contains compiled code and should not be committed to version control

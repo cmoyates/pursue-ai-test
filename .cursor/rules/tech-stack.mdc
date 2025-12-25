@@ -12,7 +12,7 @@ This document outlines the technology stack, dependency versions, and best pract
 
 ### Core Framework
 
-- **Bevy 0.13.0** - Modern data-driven game engine built in Rust
+- **Bevy 0.17.3** - Modern data-driven game engine built in Rust
   - Uses ECS (Entity Component System) architecture
   - Provides rendering, windowing, input handling, and plugin system
   - Supports 2D and 3D game development
@@ -23,7 +23,7 @@ This document outlines the technology stack, dependency versions, and best pract
 
 ## Dependencies
 
-### Bevy 0.13.0
+### Bevy 0.17.3
 
 **Purpose**: Game engine and ECS framework
 
@@ -36,7 +36,7 @@ This document outlines the technology stack, dependency versions, and best pract
 - Gizmos for debug rendering
 - Diagnostic plugins (`FrameTimeDiagnosticsPlugin`, `LogDiagnosticsPlugin`)
 
-**Best Practices for Bevy 0.13.0**:
+**Best Practices for Bevy 0.17.3**:
 
 1. **System Organization**:
 
@@ -91,12 +91,12 @@ This document outlines the technology stack, dependency versions, and best pract
    ```
 
 6. **Version-Specific Notes**:
-   - Bevy 0.13 uses `ButtonInput` instead of `Input` for input handling
+   - Bevy 0.17 uses `ButtonInput` instead of `Input` for input handling
    - Use `PresentMode::AutoVsync` for VSync control
    - Diagnostic plugins are available for performance monitoring
    - Gizmos API is stable for debug rendering
 
-### rand 0.8.5
+### rand 0.9
 
 **Purpose**: Random number generation
 
@@ -105,7 +105,7 @@ This document outlines the technology stack, dependency versions, and best pract
 - Random node selection in pathfinding (`rand::thread_rng().gen_range()`)
 - Random color generation for polygons (`rng.gen_range(0.0..=1.0)`)
 
-**Best Practices for rand 0.8.5**:
+**Best Practices for rand 0.9**:
 
 1. **Thread-Local RNG**:
 
@@ -130,10 +130,10 @@ This document outlines the technology stack, dependency versions, and best pract
    - Avoid creating new RNG instances in hot loops
 
 4. **Version-Specific Notes**:
-   - rand 0.8 uses the `Rng` trait which must be imported
-   - Range syntax changed from `(0, 100)` to `0..100` in 0.8
+   - rand 0.9 uses the `Rng` trait which must be imported
+   - Range syntax uses `0..100` for exclusive ranges and `0..=100` for inclusive ranges
 
-### serde 1.0.196
+### serde 1.0
 
 **Purpose**: Serialization and deserialization framework
 
@@ -144,7 +144,7 @@ This document outlines the technology stack, dependency versions, and best pract
 - Currently used indirectly through `serde_json` for level data deserialization
 - Level data loaded from JSON files (`assets/level.json`)
 
-**Best Practices for serde 1.0.196**:
+**Best Practices for serde 1.0**:
 
 1. **Derive Macros**:
 
@@ -160,7 +160,7 @@ This document outlines the technology stack, dependency versions, and best pract
 
    ```toml
    # Good: Only enable needed features
-   serde = { version = "1.0.196", features = ["derive"] }
+   serde = { version = "1.0", features = ["derive"] }
    ```
 
 3. **Error Handling**:
@@ -178,7 +178,7 @@ This document outlines the technology stack, dependency versions, and best pract
    - The `derive` feature is essential for automatic trait implementation
    - Consider using `serde_json` for JSON, `toml` for TOML, etc.
 
-### serde_json 1.0.112
+### serde_json 1.0
 
 **Purpose**: JSON serialization/deserialization using serde
 
@@ -187,7 +187,7 @@ This document outlines the technology stack, dependency versions, and best pract
 - Deserializing level data from JSON files
 - Used with `include_bytes!` macro for compile-time asset inclusion
 
-**Best Practices for serde_json 1.0.112**:
+**Best Practices for serde_json 1.0**:
 
 1. **Deserialization Patterns**:
 
@@ -215,7 +215,7 @@ This document outlines the technology stack, dependency versions, and best pract
    ```
 
 4. **Version Compatibility**:
-   - serde_json 1.0.112 is compatible with serde 1.0.196
+   - serde_json 1.0 is compatible with serde 1.0
    - Both follow semantic versioning and are stable
 
 ## General Best Practices
@@ -282,13 +282,13 @@ When updating dependencies:
    - Check changelog for any breaking changes
 
 3. **rand Updates**:
-   - rand 0.8 is stable
-   - Consider rand 0.9+ for new projects (but test compatibility)
+   - rand 0.9 is stable and current
+   - Generally backward compatible within major versions
 
 ## References
 
 - [Bevy Documentation](https://bevyengine.org/learn/)
-- [Bevy 0.13 Migration Guide](https://bevyengine.org/learn/migration-guides/0.12-to-0.13/)
+- [Bevy Migration Guides](https://bevyengine.org/learn/migration-guides/)
 - [serde Documentation](https://serde.rs/)
 - [rand Documentation](https://docs.rs/rand/)
 - [Rust Edition Guide](https://doc.rust-lang.org/edition-guide/)

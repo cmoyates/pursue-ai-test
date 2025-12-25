@@ -120,10 +120,23 @@ fn get_start_node_id(
     start_position: Vec2,
     goal_position: Vec2,
 ) -> Option<usize> {
+    // Use spatial lookup to get candidate nodes
+    let nearby = pathfinding.get_nearby_node_indices(start_position);
+
+    // If no nearby nodes, fall back to all nodes
+    let candidates: Vec<usize> = if nearby.is_empty() {
+        // Fallback: create indices 0..len
+        (0..pathfinding.nodes.len()).collect()
+    } else {
+        nearby
+    };
+
     let mut start_node_id: Option<usize> = None;
     let mut start_graph_node_distance = f32::MAX;
 
-    for (node_index, node) in pathfinding.nodes.iter().enumerate() {
+    // Only iterate over candidate nodes
+    for node_index in candidates {
+        let node = &pathfinding.nodes[node_index];
         let distance = (start_position - node.position).length_squared();
 
         if distance > start_graph_node_distance {
@@ -151,9 +164,23 @@ fn get_start_node_id(
 }
 
 fn get_goal_node_id(pathfinding: &PathfindingGraph, goal_position: Vec2) -> Option<usize> {
+    // Use spatial lookup to get candidate nodes
+    let nearby = pathfinding.get_nearby_node_indices(goal_position);
+
+    // If no nearby nodes, fall back to all nodes
+    let candidates: Vec<usize> = if nearby.is_empty() {
+        // Fallback: create indices 0..len
+        (0..pathfinding.nodes.len()).collect()
+    } else {
+        nearby
+    };
+
     let mut goal_node_id: Option<usize> = None;
     let mut closest_distance = f32::MAX;
-    for (node_index, node) in pathfinding.nodes.iter().enumerate() {
+
+    // Only iterate over candidate nodes
+    for node_index in candidates {
+        let node = &pathfinding.nodes[node_index];
         let distance = (goal_position - node.position).length_squared();
 
         if distance < closest_distance {

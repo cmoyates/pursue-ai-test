@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bevy::{
     app::{App, Plugin},
     ecs::system::ResMut,
@@ -13,12 +15,17 @@ use super::{platformer_ai::PLATFORMER_AI_JUMP_FORCE, pursue_ai::PURSUE_AI_AGENT_
 const PATHFINDING_NODE_SPACING: f32 = 20.0;
 const PATHFINDING_NODE_DIRECTION_THRESHOLD: f32 = -0.1;
 const JUMPABILITY_CHECK_TIMESTEP_DIVISIONS: i32 = 10;
+const SPATIAL_CELL_SIZE: f32 = 50.0; // ~2.5x node spacing
 
 pub struct PathfindingPlugin;
 
 impl Plugin for PathfindingPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(PathfindingGraph { nodes: Vec::new() });
+        app.insert_resource(PathfindingGraph {
+            nodes: Vec::new(),
+            spatial_grid: HashMap::new(),
+            grid_bounds: (Vec2::ZERO, Vec2::ZERO),
+        });
     }
 }
 
@@ -36,6 +43,8 @@ pub fn init_pathfinding_graph(level: &Level, mut pathfinding: ResMut<Pathfinding
     calculate_normals(&mut pathfinding, level);
 
     setup_corners(&mut pathfinding);
+
+    build_spatial_index(&mut pathfinding);
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +79,33 @@ pub struct PathfindingGraphNode {
 #[derive(Resource)]
 pub struct PathfindingGraph {
     pub nodes: Vec<PathfindingGraphNode>,
+    pub spatial_grid: HashMap<(i32, i32), Vec<usize>>,
+    pub grid_bounds: (Vec2, Vec2), // (min, max) for bounds checking
+}
+
+impl PathfindingGraph {
+    /// Convert a world position to a grid cell coordinate
+    pub fn position_to_cell(&self, pos: Vec2) -> (i32, i32) {
+        let x = ((pos.x - self.grid_bounds.0.x) / SPATIAL_CELL_SIZE).floor() as i32;
+        let y = ((pos.y - self.grid_bounds.0.y) / SPATIAL_CELL_SIZE).floor() as i32;
+        (x, y)
+    }
+
+    /// Get node indices in cells near the given position (3x3 grid search)
+    pub fn get_nearby_node_indices(&self, pos: Vec2) -> Vec<usize> {
+        let (cx, cy) = self.position_to_cell(pos);
+        let mut indices = Vec::new();
+
+        // Search 3x3 grid of cells
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                if let Some(cell_nodes) = self.spatial_grid.get(&(cx + dx, cy + dy)) {
+                    indices.extend(cell_nodes.iter().copied());
+                }
+            }
+        }
+        indices
+    }
 }
 
 pub fn place_nodes(pathfinding: &mut PathfindingGraph, level: &Level) {
@@ -472,4 +508,30 @@ pub fn setup_corners(pathfinding: &mut PathfindingGraph) {
                 Some(line_dir.dot(pathfinding.nodes[node_index].normal) < 0.0);
         }
     }
+}
+
+/// Build spatial index for O(1) node lookups
+fn build_spatial_index(pathfinding: &mut PathfindingGraph) {
+    // Calculate bounds from all nodes
+    let mut min = Vec2::splat(f32::MAX);
+    let mut max = Vec2::splat(f32::MIN);
+    for node in &pathfinding.nodes {
+        min = min.min(node.position);
+        max = max.max(node.position);
+    }
+    pathfinding.grid_bounds = (min, max);
+
+    // Populate spatial grid
+    pathfinding.spatial_grid.clear();
+    for (idx, node) in pathfinding.nodes.iter().enumerate() {
+        let cell = pathfinding.position_to_cell(node.position);
+        pathfinding.spatial_grid.entry(cell).or_default().push(idx);
+    }
+
+    // Debug: verify spatial index is populated
+    println!(
+        "Spatial index built: {} nodes in {} grid cells",
+        pathfinding.nodes.len(),
+        pathfinding.spatial_grid.len()
+    );
 }

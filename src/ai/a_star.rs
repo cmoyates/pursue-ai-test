@@ -1,8 +1,15 @@
-use std::{cmp::Ordering, collections::{BinaryHeap, HashMap, HashSet}};
+use std::{
+    cmp::Ordering,
+    collections::{BinaryHeap, HashMap, HashSet},
+};
 
 use bevy::math::Vec2;
 
 use super::pathfinding::{PathfindingGraph, PathfindingGraphConnection, PathfindingGraphNode};
+
+// Pathfinding cost constants
+const EFFORT_WEIGHT: f32 = 1.0; // Weight for jump effort in g_cost
+const VERTICAL_HEURISTIC_WEIGHT: f32 = 1.5; // Penalize upward movement in heuristic
 
 pub fn find_path(
     pathfinding: &PathfindingGraph,
@@ -24,7 +31,7 @@ pub fn find_path(
     // Get the start node
     let start_graph_node = &pathfinding.nodes[start_node_id];
     let mut start_node = AStarNode::new(start_graph_node);
-    start_node.h_cost = (goal_position - start_node.position).length();
+    start_node.h_cost = calculate_heuristic(start_node.position, goal_position);
 
     // Add the start node to the open list
     open_list.push(start_node);
@@ -53,12 +60,17 @@ pub fn find_path(
         if current_node.id == goal_node_id {
             let mut path: Vec<PathNode> = vec![];
 
-            let mut current_id = current_node.id;
-            while let Some((parent_id, _)) = came_from.get(&current_id) {
-                // Get the parent's position from the graph
-                let parent_position = pathfinding.nodes[*parent_id].position;
-                path.push(PathNode::new(*parent_id, parent_position));
-                current_id = *parent_id;
+            // First, add the goal node itself
+            path.push(PathNode::new(current_node.id, current_node.position));
+
+            // Then trace back through parents
+            let mut trace_id = current_node.parent;
+            while let Some(parent_id) = trace_id {
+                let parent_position = pathfinding.nodes[parent_id].position;
+                path.push(PathNode::new(parent_id, parent_position));
+
+                // Get the next parent from came_from
+                trace_id = came_from.get(&parent_id).map(|(pid, _)| *pid);
             }
 
             path.reverse();
@@ -71,7 +83,8 @@ pub fn find_path(
 
         // For each connection of the current node
         let current_graph_node = &pathfinding.nodes[current_node.id];
-        for connection in current_graph_node.walkable_connections
+        for connection in current_graph_node
+            .walkable_connections
             .iter()
             .chain(current_graph_node.jumpable_connections.iter())
         {
@@ -85,17 +98,20 @@ pub fn find_path(
             let connected_graph_node = &pathfinding.nodes[connected_node_id];
             let mut new_node = AStarNode::new(connected_graph_node);
 
-            // Set the g-cost to the distance to the start node
-            new_node.g_cost = connection.dist + current_node.g_cost;
+            // Set the g-cost: distance + effort (jumps are more expensive)
+            new_node.g_cost =
+                current_node.g_cost + connection.dist + EFFORT_WEIGHT * connection.effort;
 
-            // Set the h-cost to the distance to the goal
-            new_node.h_cost = (goal_position - new_node.position).length();
+            // Set the h-cost using improved heuristic that accounts for vertical movement
+            new_node.h_cost = calculate_heuristic(new_node.position, goal_position);
 
             // Set the parent of the new node
             new_node.parent = Some(current_node.id);
 
             open_list.push(new_node);
         }
+
+        // TODO: Consider droppable_connections in pathfinding when implementing drop-down mechanics
     }
 }
 
@@ -117,7 +133,8 @@ fn get_start_node_id(
         if distance == start_graph_node_distance {
             if let Some(existing_id) = start_node_id {
                 let existing_node = &pathfinding.nodes[existing_id];
-                let existing_node_to_goal = (goal_position - existing_node.position).length_squared();
+                let existing_node_to_goal =
+                    (goal_position - existing_node.position).length_squared();
                 let current_node_to_goal = (goal_position - node.position).length_squared();
 
                 if current_node_to_goal > existing_node_to_goal {
@@ -133,10 +150,7 @@ fn get_start_node_id(
     start_node_id
 }
 
-fn get_goal_node_id(
-    pathfinding: &PathfindingGraph,
-    goal_position: Vec2,
-) -> Option<usize> {
+fn get_goal_node_id(pathfinding: &PathfindingGraph, goal_position: Vec2) -> Option<usize> {
     let mut goal_node_id: Option<usize> = None;
     let mut closest_distance = f32::MAX;
     for (node_index, node) in pathfinding.nodes.iter().enumerate() {
@@ -149,6 +163,22 @@ fn get_goal_node_id(
     }
 
     goal_node_id
+}
+
+/// Calculate heuristic cost from one position to another.
+/// Accounts for platformer movement characteristics by penalizing upward movement.
+fn calculate_heuristic(from: Vec2, to: Vec2) -> f32 {
+    let dx = (to.x - from.x).abs();
+    let dy = to.y - from.y; // Signed: positive = upward movement
+
+    // Penalize upward movement more heavily since jumps are expensive
+    let vertical_cost = if dy > 0.0 {
+        dy * VERTICAL_HEURISTIC_WEIGHT
+    } else {
+        dy.abs() // Falling is cheaper than jumping
+    };
+
+    (dx * dx + vertical_cost * vertical_cost).sqrt()
 }
 
 #[derive(Clone, Debug)]
@@ -197,10 +227,20 @@ impl Ord for AStarNode {
         let other_f_cost = other.get_f_cost();
 
         match self_f_cost.partial_cmp(&other_f_cost) {
-            Some(Ordering::Equal) => self
-                .h_cost
-                .partial_cmp(&other.h_cost)
-                .unwrap_or(Ordering::Equal),
+            Some(Ordering::Equal) => {
+                // When f_cost is equal, prefer nodes closer to goal (lower h_cost)
+                match self.h_cost.partial_cmp(&other.h_cost) {
+                    Some(Ordering::Equal) => {
+                        // When f_cost AND h_cost are equal, prefer lower g_cost (more direct paths)
+                        other
+                            .g_cost
+                            .partial_cmp(&self.g_cost)
+                            .unwrap_or(Ordering::Equal)
+                    }
+                    Some(order) => order,
+                    None => Ordering::Equal,
+                }
+            }
             Some(order) => order.reverse(),
             None => Ordering::Equal,
         }

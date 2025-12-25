@@ -12,9 +12,12 @@ use bevy::{
     transform::components::Transform,
 };
 
-use crate::{s_move_goal_point, GoalPoint, GizmosVisible, Physics, GRAVITY_STRENGTH};
+use crate::{s_move_goal_point, GizmosVisible, GoalPoint, Physics, GRAVITY_STRENGTH};
 
-use super::{a_star::{find_path, PathNode}, pathfinding::PathfindingGraph};
+use super::{
+    a_star::{find_path, PathNode},
+    pathfinding::PathfindingGraph,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(dead_code)]
@@ -163,12 +166,8 @@ fn get_move_inputs(
     let mut jump_to_node = None;
 
     // Check if cached path is still valid
-    let path_needs_recalculation = should_recalculate_path(
-        platformer_ai,
-        agent_position,
-        goal_position,
-        pathfinding,
-    );
+    let path_needs_recalculation =
+        should_recalculate_path(platformer_ai, agent_position, goal_position, pathfinding);
 
     let path = if path_needs_recalculation {
         // Recalculate path
@@ -204,10 +203,10 @@ fn get_move_inputs(
         // Use current_path_index to get the current and next nodes
         let current_idx = platformer_ai.current_path_index;
         if current_idx < path.len() && path.len() > current_idx + 1 {
-            let offset_current_node =
-                path[current_idx].position + pathfinding.nodes[path[current_idx].id].normal * agent_physics.radius;
-            let offset_next_node: Vec2 =
-                path[current_idx + 1].position + pathfinding.nodes[path[current_idx + 1].id].normal * agent_physics.radius;
+            let offset_current_node = path[current_idx].position
+                + pathfinding.nodes[path[current_idx].id].normal * agent_physics.radius;
+            let offset_next_node: Vec2 = path[current_idx + 1].position
+                + pathfinding.nodes[path[current_idx + 1].id].normal * agent_physics.radius;
 
             let agent_on_wall = agent_physics.normal.y > -0.01;
 
@@ -271,15 +270,21 @@ fn get_move_inputs(
             }
 
             move_dir = match path_following_strategy {
-                PathFollowingStrategy::CurrentNodeToNextNode => path[current_idx + 1].position - path[current_idx].position,
+                PathFollowingStrategy::CurrentNodeToNextNode => {
+                    path[current_idx + 1].position - path[current_idx].position
+                }
                 PathFollowingStrategy::CurrentNodeOffsetToNextNodeOffset => {
                     offset_next_node - offset_current_node
                 }
-                PathFollowingStrategy::AgentToCurrentNode => path[current_idx].position - agent_position,
+                PathFollowingStrategy::AgentToCurrentNode => {
+                    path[current_idx].position - agent_position
+                }
                 PathFollowingStrategy::AgentToCurrentNodeOffset => {
                     offset_current_node - agent_position
                 }
-                PathFollowingStrategy::AgentToNextNode => path[current_idx + 1].position - agent_position,
+                PathFollowingStrategy::AgentToNextNode => {
+                    path[current_idx + 1].position - agent_position
+                }
                 PathFollowingStrategy::AgentToNextNodeOffset => offset_next_node - agent_position,
                 // PathFollowingStrategy::AgentToGoal => pathfinding.goal_position - agent_position,
                 PathFollowingStrategy::None => Vec2::ZERO,
@@ -292,7 +297,8 @@ fn get_move_inputs(
                 || path_following_strategy == PathFollowingStrategy::AgentToNextNode)
                 && is_jumpable_connection
             {
-                let node_position_delta = path[current_idx + 1].position - path[current_idx].position;
+                let node_position_delta =
+                    path[current_idx + 1].position - path[current_idx].position;
                 let gravity_acceleration = Vec2::new(0.0, -GRAVITY_STRENGTH);
                 let jump_time = JUMP_TIME_MULTIPLIER
                     * (4.0 * node_position_delta.dot(node_position_delta)
@@ -353,16 +359,12 @@ fn should_recalculate_path(
     false
 }
 
-fn advance_path_index(
-    platformer_ai: &mut PlatformerAI,
-    agent_position: Vec2,
-    path: &[PathNode],
-) {
+fn advance_path_index(platformer_ai: &mut PlatformerAI, agent_position: Vec2, path: &[PathNode]) {
     // Advance index if agent reached current node
     while platformer_ai.current_path_index < path.len() {
         let current_node = &path[platformer_ai.current_path_index];
         let distance_sq = (agent_position - current_node.position).length_squared();
-        
+
         if distance_sq <= NODE_REACHED_THRESHOLD_SQ {
             platformer_ai.current_path_index += 1;
         } else {

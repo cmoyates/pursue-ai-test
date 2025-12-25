@@ -5,6 +5,7 @@ use bevy::{
 
 use crate::{Physics, GRAVITY_STRENGTH};
 
+#[allow(dead_code)]
 pub fn apply_gravity_toward_normal(physics: &mut Physics, falling: bool) {
     if falling {
         physics.acceleration.y = -GRAVITY_STRENGTH;
@@ -14,6 +15,7 @@ pub fn apply_gravity_toward_normal(physics: &mut Physics, falling: bool) {
     }
 }
 
+#[allow(dead_code)]
 pub fn update_physics_and_transform(physics: &mut Physics, transform: &mut Transform) {
     // Update velocity
     let new_velocity = physics.velocity + physics.acceleration;
@@ -26,6 +28,7 @@ pub fn update_physics_and_transform(physics: &mut Physics, transform: &mut Trans
     transform.translation.y += physics.velocity.y;
 }
 
+#[allow(dead_code)]
 pub fn apply_movement_acceleration(
     physics: &mut Physics,
     move_dir: &Vec2,
@@ -51,6 +54,7 @@ pub fn apply_movement_acceleration(
         };
 }
 
+#[allow(dead_code)]
 pub fn handle_jumping(physics: &mut Physics, falling: bool, jump_velocity: Vec2) {
     // If the agent is trying to jump
     if jump_velocity.length_squared() > 0.0 && !falling {

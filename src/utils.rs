@@ -17,7 +17,7 @@ pub fn line_intersect(
     let t = cross_product(a_to_c, line_2) / r_cross_s;
     let u = cross_product(a_to_c, line_1) / r_cross_s;
 
-    if t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0 {
+    if (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u) {
         Some(Vec2::new(
             line_1_start.x + t * line_1.x,
             line_1_start.y + t * line_1.y,
@@ -35,5 +35,5 @@ pub fn side_of_line_detection(line_start: Vec2, line_end: Vec2, point: Vec2) -> 
     let determinant = (line_end.x - line_start.x) * (point.y - line_start.y)
         - (line_end.y - line_start.y) * (point.x - line_start.x);
 
-    return determinant.signum();
+    determinant.signum()
 }

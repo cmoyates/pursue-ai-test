@@ -9,13 +9,7 @@ pub fn find_path(
     start_position: Vec2,
     goal_position: Vec2,
 ) -> Option<Vec<PathNode>> {
-    let goal_node_option = get_goal_node(pathfinding, goal_position);
-
-    if goal_node_option.is_none() {
-        return None;
-    }
-
-    let goal_node = goal_node_option.unwrap();
+    let goal_node = get_goal_node(pathfinding, goal_position)?;
 
     let mut open_list: BinaryHeap<AStarNode> = BinaryHeap::new();
     let mut closed_list: Vec<AStarNode> = vec![];
@@ -125,7 +119,7 @@ fn get_start_node(
     // Set the h-cost to the distance to the goal
     start_a_star_node.h_cost = (goal_position - start_a_star_node.position).length();
 
-    return start_a_star_node;
+    start_a_star_node
 }
 
 fn get_goal_node(
@@ -156,7 +150,9 @@ pub struct AStarNode {
     pub g_cost: f32,
     pub h_cost: f32,
     pub parent: Option<usize>,
+    #[allow(dead_code)]
     pub is_corner: bool,
+    #[allow(dead_code)]
     pub is_external_corner: Option<bool>,
 }
 

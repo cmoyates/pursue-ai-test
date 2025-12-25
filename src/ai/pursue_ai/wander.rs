@@ -9,32 +9,28 @@ use crate::{
         pathfinding::{PathfindingGraph, PathfindingGraphNode},
         pursue_ai::PursueAIState,
     },
-    Physics, GRAVITY_STRENGTH,
+    Physics,
 };
 
 use super::PursueAI;
 
+#[allow(dead_code)]
 pub const WANDER_MAX_SPEED: f32 = 3.0;
 
 pub fn wander_update(
     transform: &mut Transform,
-    physics: &mut Physics,
-    pursue_ai: &mut PursueAI,
+    _physics: &mut Physics,
+    _pursue_ai: &mut PursueAI,
     pathfinding: &mut PathfindingGraph,
 ) -> Option<PursueAIState> {
-    wander_movement(transform, physics, pursue_ai, pathfinding);
+    wander_movement(transform, pathfinding);
 
-    return None;
+    None
 }
 
-pub fn wander_movement(
-    transform: &mut Transform,
-    physics: &mut Physics,
-    pursue_ai: &mut PursueAI,
-    pathfinding: &mut PathfindingGraph,
-) {
+pub fn wander_movement(transform: &mut Transform, pathfinding: &mut PathfindingGraph) {
     // Pick a random goal point
-    let goal_node = get_random_goal_node(transform.translation.xy(), pathfinding);
+    let _goal_node = get_random_goal_node(transform.translation.xy(), pathfinding);
 
     // If the goal point is reached
     // pick a new goal point

@@ -6,7 +6,7 @@ mod utils;
 use ::bevy::prelude::*;
 use ai::{
     pathfinding::{init_pathfinding_graph, PathfindingGraph, PathfindingPlugin},
-    platformer_ai::{PlatformerAI, PlatformerAIPlugin},
+    platformer_ai::PlatformerAI,
     pursue_ai::{PursueAI, PursueAIPlugin, PursueAIState, PURSUE_AI_AGENT_RADIUS},
 };
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
@@ -111,6 +111,7 @@ pub fn s_init(mut commands: Commands, pathfinding: ResMut<PathfindingGraph>) {
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn s_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut exit: MessageWriter<AppExit>,
@@ -225,10 +226,7 @@ pub fn s_render(
     for polygon_index in 0..level.polygons.len() {
         let polygon = &level.polygons[polygon_index];
 
-        gizmos.linestrip_2d(
-            polygon.points.iter().cloned().collect::<Vec<Vec2>>(),
-            polygon.color,
-        );
+        gizmos.linestrip_2d(polygon.points.to_vec(), polygon.color);
     }
 
     // Draw the goal point

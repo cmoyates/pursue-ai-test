@@ -91,7 +91,7 @@ pub fn place_nodes(pathfinding: &mut PathfindingGraph, level: &Level) {
 
             let length = start_to_end.length();
 
-            let nodes_on_line_count = (length.abs() / 20.0).ceil() as f32;
+            let nodes_on_line_count = (length.abs() / 20.0).ceil();
             let dist_between_nodes_on_line = length / nodes_on_line_count;
 
             start_to_end = start_to_end.normalize();
@@ -103,7 +103,7 @@ pub fn place_nodes(pathfinding: &mut PathfindingGraph, level: &Level) {
                     let mut new_node = PathfindingGraphNode {
                         id: pathfinding.nodes.len(),
                         position: node_pos,
-                        polygon_index: polygon_index,
+                        polygon_index,
                         line_indicies: vec![(line_index - 1)],
                         walkable_connections: Vec::new(),
                         jumpable_connections: Vec::new(),
@@ -129,7 +129,7 @@ pub fn place_nodes(pathfinding: &mut PathfindingGraph, level: &Level) {
                 let new_node = PathfindingGraphNode {
                     id: pathfinding.nodes.len(),
                     position: end,
-                    polygon_index: polygon_index,
+                    polygon_index,
                     line_indicies: vec![(line_index - 1)],
                     walkable_connections: vec![PathfindingGraphConnection {
                         node_id: pathfinding.nodes.len() - 1,
@@ -327,7 +327,7 @@ pub fn jumpability_check(
         .sqrt()
         .sqrt();
     let launch_velocity = delta_p / t_low_energy - acceleration * t_low_energy / 2.0;
-    let timestep = t_low_energy / 10 as f32;
+    let timestep = t_low_energy / 10_f32;
 
     if jump_possible {
         'polygon: for polygon_index in 0..level.polygons.len() {
@@ -423,11 +423,11 @@ pub fn jumpability_check(
         }
     }
 
-    return if jump_possible {
+    if jump_possible {
         Some(launch_velocity.length())
     } else {
         None
-    };
+    }
 }
 
 pub fn calculate_normals(pathfinding: &mut PathfindingGraph, level: &Level) {

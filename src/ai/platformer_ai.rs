@@ -16,6 +16,7 @@ use crate::{s_move_goal_point, GizmosVisible, Physics, GRAVITY_STRENGTH};
 use super::{a_star::find_path, pathfinding::PathfindingGraph};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub enum PathFollowingStrategy {
     CurrentNodeToNextNode,
     CurrentNodeOffsetToNextNodeOffset,
@@ -37,6 +38,7 @@ pub const PLATFORMER_AI_JUMP_FORCE: f32 = 8.0;
 
 pub const ACCELERATION_SCALERS: (f32, f32) = (0.2, 0.4);
 
+#[allow(dead_code)]
 pub struct PlatformerAIPlugin;
 
 impl Plugin for PlatformerAIPlugin {
@@ -140,16 +142,16 @@ fn get_move_inputs(
     let mut jump_from_node = None;
     let mut jump_to_node = None;
 
-    let path = find_path(&pathfinding, agent_position, goal_position);
+    let path = find_path(pathfinding, agent_position, goal_position);
 
     if let Some(path) = path {
         if gizmos_visible {
             let mut prev_pos = agent_position;
-            for i in 0..path.len() {
-                gizmos.circle_2d(path[i].position, 5.0, Color::srgb(0.0, 1.0, 0.0));
-                gizmos.line_2d(prev_pos, path[i].position, Color::srgb(0.0, 1.0, 0.0));
+            for node in &path {
+                gizmos.circle_2d(node.position, 5.0, Color::srgb(0.0, 1.0, 0.0));
+                gizmos.line_2d(prev_pos, node.position, Color::srgb(0.0, 1.0, 0.0));
 
-                prev_pos = path[i].position;
+                prev_pos = node.position;
             }
 
             // gizmos.line_2d(prev_pos, pathfinding.goal_position, Color::srgb(0.0, 1.0, 0.0));
@@ -245,23 +247,22 @@ fn get_move_inputs(
             .normalize_or_zero();
 
             // Jumping
-            if path_following_strategy == PathFollowingStrategy::AgentToNextNodeOffset
-                || path_following_strategy == PathFollowingStrategy::AgentToNextNode
+            if (path_following_strategy == PathFollowingStrategy::AgentToNextNodeOffset
+                || path_following_strategy == PathFollowingStrategy::AgentToNextNode)
+                && is_jumpable_connection
             {
-                if is_jumpable_connection {
-                    let node_position_delta = path[1].position - path[0].position;
-                    let gravity_acceleration = Vec2::new(0.0, -GRAVITY_STRENGTH);
-                    let jump_time = 1.0
-                        * (4.0 * node_position_delta.dot(node_position_delta)
-                            / gravity_acceleration.dot(gravity_acceleration))
-                        .sqrt()
-                        .sqrt();
-                    jump_velocity =
-                        node_position_delta / jump_time - gravity_acceleration * jump_time / 2.0;
+                let node_position_delta = path[1].position - path[0].position;
+                let gravity_acceleration = Vec2::new(0.0, -GRAVITY_STRENGTH);
+                let jump_time = 1.0
+                    * (4.0 * node_position_delta.dot(node_position_delta)
+                        / gravity_acceleration.dot(gravity_acceleration))
+                    .sqrt()
+                    .sqrt();
+                jump_velocity =
+                    node_position_delta / jump_time - gravity_acceleration * jump_time / 2.0;
 
-                    jump_from_node = Some(offset_current_node);
-                    jump_to_node = Some(offset_next_node);
-                }
+                jump_from_node = Some(offset_current_node);
+                jump_to_node = Some(offset_next_node);
             }
         }
     }

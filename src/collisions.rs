@@ -11,7 +11,7 @@ use bevy::{
 
 use crate::{
     ai::{
-        platformer_ai::{s_platformer_ai_movement, PlatformerAI},
+        platformer_ai::s_platformer_ai_movement,
         pursue_ai::PursueAI,
     },
     level::Level,
@@ -30,7 +30,7 @@ impl Plugin for CollisionPlugin {
 pub fn s_collision(
     mut entity_query: Query<(&mut Transform, &mut Physics, &mut PursueAI)>,
     level: Res<Level>,
-    mut gizmos: Gizmos,
+    _gizmos: Gizmos,
 ) {
     if let Ok((mut transform, mut physics, mut _platformer_ai)) = entity_query.single_mut() {
         let mut adjustment = Vec2::ZERO;
@@ -169,5 +169,5 @@ pub fn find_projection(start: Vec2, end: Vec2, point: Vec2, radius: f32) -> (f32
 
     let dist = (point - projection_point).length_squared();
 
-    return (dist, projection_point);
+    (dist, projection_point)
 }

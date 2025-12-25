@@ -3,6 +3,7 @@ use bevy::{
     color::Color,
     ecs::{
         component::Component,
+        query::{With, Without},
         schedule::IntoScheduleConfigs,
         system::{Query, Res},
     },
@@ -11,7 +12,7 @@ use bevy::{
     transform::components::Transform,
 };
 
-use crate::{s_move_goal_point, GizmosVisible, Physics, GRAVITY_STRENGTH};
+use crate::{s_move_goal_point, GoalPoint, GizmosVisible, Physics, GRAVITY_STRENGTH};
 
 use super::{a_star::find_path, pathfinding::PathfindingGraph};
 
@@ -64,8 +65,16 @@ pub fn s_platformer_ai_movement(
     mut platformer_ai_query: Query<(&mut Transform, &mut Physics, &mut PlatformerAI)>,
     pathfinding: Res<PathfindingGraph>,
     gismo_visible: Res<GizmosVisible>,
+    goal_point_query: Query<&Transform, (With<GoalPoint>, Without<PlatformerAI>)>,
     mut gizmos: Gizmos,
 ) {
+    // Get goal point position, default to (0, 0) if not found
+    let goal_position = goal_point_query
+        .single()
+        .ok()
+        .map(|t| t.translation.xy())
+        .unwrap_or(Vec2::ZERO);
+
     for (mut transform, mut physics, mut platformer_ai) in platformer_ai_query.iter_mut() {
         let (move_dir, jump_velocity, jump_from_node, jump_to_node) = get_move_inputs(
             pathfinding.as_ref(),
@@ -73,7 +82,7 @@ pub fn s_platformer_ai_movement(
             &physics,
             &mut gizmos,
             gismo_visible.visible,
-            Vec2::new(0.0, 0.0),
+            goal_position,
         );
 
         if gismo_visible.visible {
@@ -105,10 +114,8 @@ pub fn s_platformer_ai_movement(
                     physics.has_wall_jumped = false;
                     physics.walled = 0;
 
-                    println!("Jump!!!");
                     platformer_ai.jump_from_pos = jump_from_node;
                     platformer_ai.jump_to_pos = jump_to_node;
-                    println!("Initial Jump Velocity: {}", jump_velocity.length());
                 }
                 // If on a wall
                 else if physics.walled != 0 {
@@ -119,12 +126,8 @@ pub fn s_platformer_ai_movement(
                     physics.walled = 0;
                     physics.grounded = false;
                     physics.has_wall_jumped = true;
-                    println!("Wall Jump!!!");
-                    dbg!(move_dir);
-                    dbg!(transform.translation.xy());
                     platformer_ai.jump_from_pos = jump_from_node;
                     platformer_ai.jump_to_pos = jump_to_node;
-                    println!("Initial Jump Velocity: {}", jump_velocity.length());
                 }
             }
         }
@@ -202,16 +205,13 @@ fn get_move_inputs(
 
                     path_following_strategy = if agent_on_other_side_next_frame || agent_not_moving
                     {
-                        println!("Test 1");
                         PathFollowingStrategy::AgentToNextNodeOffset
                     } else {
-                        println!("Test 2");
                         PathFollowingStrategy::AgentToCurrentNodeOffset
                     };
                 } else {
                     // Non-jumping corner
                     if current_node_is_corner {
-                        println!("Test 3");
                         path_following_strategy = PathFollowingStrategy::AgentToNextNode;
                     }
                     // Non-jumping flat surface
@@ -222,10 +222,8 @@ fn get_move_inputs(
                         if current_pos_to_next_offset.length_squared()
                             <= current_offset_to_next_offset.length_squared()
                         {
-                            println!("Test 4");
                             path_following_strategy = PathFollowingStrategy::AgentToNextNodeOffset;
                         } else {
-                            println!("Test 5");
                             path_following_strategy =
                                 PathFollowingStrategy::AgentToCurrentNodeOffset;
                         }
@@ -234,7 +232,6 @@ fn get_move_inputs(
             }
             // Agent falling
             else {
-                println!("Test 6");
                 path_following_strategy = PathFollowingStrategy::AgentToNextNodeOffset;
             }
 

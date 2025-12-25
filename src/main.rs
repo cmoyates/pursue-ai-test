@@ -6,11 +6,9 @@ mod utils;
 use ::bevy::prelude::*;
 use ai::{
     pathfinding::{init_pathfinding_graph, PathfindingGraph, PathfindingPlugin},
-    platformer_ai::PlatformerAI,
+    platformer_ai::{PlatformerAI, PlatformerAIPlugin},
     pursue_ai::{PursueAI, PursueAIPlugin, PursueAIState, PURSUE_AI_AGENT_RADIUS},
 };
-use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
-use bevy::diagnostic::LogDiagnosticsPlugin;
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::window::{PresentMode, PrimaryWindow};
 use collisions::{s_collision, CollisionPlugin};
@@ -37,9 +35,8 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .add_plugins(LogDiagnosticsPlugin::default())
         .add_plugins(PathfindingPlugin)
+        .add_plugins(PlatformerAIPlugin)
         .add_plugins(PursueAIPlugin)
         .add_plugins(CollisionPlugin)
         // Startup systems
@@ -120,6 +117,11 @@ pub fn s_init(mut commands: Commands, pathfinding: ResMut<PathfindingGraph>) {
             walled: 0,
             has_wall_jumped: false,
         },
+        PlatformerAI {
+            current_target_node: None,
+            jump_from_pos: None,
+            jump_to_pos: None,
+        },
         PursueAI {
             state: PursueAIState::Wander,
         },
@@ -136,7 +138,10 @@ pub fn s_handle_exit(keyboard_input: Res<ButtonInput<KeyCode>>, mut exit: Messag
 
 pub fn s_handle_reset(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut platformer_ai_query: Query<(&mut Transform, &mut Physics, &mut PlatformerAI)>,
+    mut platformer_ai_query: Query<
+        (&mut Transform, &mut Physics, &mut PlatformerAI),
+        With<PursueAI>,
+    >,
 ) {
     // R to reset
     if keyboard_input.just_pressed(KeyCode::KeyR) {
@@ -207,8 +212,7 @@ pub fn s_handle_pathfinding_debug(
                     if (mouse_pos_world - node.position).length_squared()
                         < PATHFINDING_NODE_CLICK_RADIUS.powi(2)
                     {
-                        println!("Node index: {}", node_index);
-                        dbg!(node);
+                        // Node clicked (debug output removed)
                     }
                 }
             }

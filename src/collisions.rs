@@ -129,7 +129,6 @@ pub fn s_collision(
             };
 
             if colliding_with_polygon && inside_polygon {
-                println!("Clipped");
                 transform.translation = physics.prev_position.extend(0.0);
             }
         }

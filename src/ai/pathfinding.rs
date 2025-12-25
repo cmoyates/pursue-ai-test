@@ -40,6 +40,8 @@ pub fn init_pathfinding_graph(level: &Level, mut pathfinding: ResMut<Pathfinding
 
     make_jumpable_connections(&mut pathfinding, level, PURSUE_AI_AGENT_RADIUS);
 
+    make_droppable_connections(&mut pathfinding, level, PURSUE_AI_AGENT_RADIUS);
+
     calculate_normals(&mut pathfinding, level);
 
     setup_corners(&mut pathfinding);
@@ -342,6 +344,87 @@ pub fn make_jumpable_connections(pathfinding: &mut PathfindingGraph, level: &Lev
     }
 }
 
+pub fn make_droppable_connections(pathfinding: &mut PathfindingGraph, level: &Level, radius: f32) {
+    const DROP_EFFORT_MULTIPLIER: f32 = 0.5; // Falling is cheaper than jumping
+    const MAX_HORIZONTAL_DROP_OFFSET: f32 = PATHFINDING_NODE_SPACING * 1.5; // Allow small horizontal offset (1.5x node spacing)
+
+    for i in 0..pathfinding.nodes.len() {
+        let main_node = &pathfinding.nodes[i];
+
+        let mut droppable_connections: Vec<PathfindingGraphConnection> = Vec::new();
+
+        'other_nodes: for j in 0..pathfinding.nodes.len() {
+            // Make sure we're not comparing the same node
+            if i == j {
+                continue;
+            }
+
+            let other_node = &pathfinding.nodes[j];
+
+            // Make sure the nodes are not on the same polygon
+            if main_node.polygon_index == other_node.polygon_index {
+                continue;
+            }
+
+            // Check that target is below source (droppable connections are one-way downward)
+            if other_node.position.y >= main_node.position.y {
+                continue;
+            }
+
+            // Check that target is almost directly below (limit horizontal offset)
+            let horizontal_distance = (other_node.position.x - main_node.position.x).abs();
+            if horizontal_distance > MAX_HORIZONTAL_DROP_OFFSET {
+                continue;
+            }
+
+            // Check line-of-sight: ensure no geometry blocks the direct path
+            for polygon_index in 0..level.polygons.len() {
+                let polygon = &level.polygons[polygon_index];
+
+                'polygon_lines: for line_index in 1..polygon.points.len() {
+                    // Skip lines that belong to the source or target nodes
+                    if main_node.polygon_index == polygon_index
+                        && main_node.line_indicies.contains(&(line_index - 1))
+                        || other_node.polygon_index == polygon_index
+                            && other_node.line_indicies.contains(&(line_index - 1))
+                    {
+                        continue 'polygon_lines;
+                    }
+
+                    let start = polygon.points[line_index - 1];
+                    let end = polygon.points[line_index];
+
+                    let intersection =
+                        line_intersect(start, end, main_node.position, other_node.position);
+
+                    if intersection.is_some() {
+                        continue 'other_nodes;
+                    }
+                }
+            }
+
+            // Check if the falling trajectory is valid
+            let drop_effort = droppability_check(main_node, other_node, level, radius);
+
+            if drop_effort.is_none() {
+                continue 'other_nodes;
+            }
+
+            let drop_distance = (main_node.position - other_node.position).length();
+            let effort = drop_distance * DROP_EFFORT_MULTIPLIER;
+
+            droppable_connections.push(PathfindingGraphConnection {
+                node_id: j,
+                dist: drop_distance,
+                connection_type: PathfindingGraphConnectionType::Droppable,
+                effort,
+            });
+        }
+
+        pathfinding.nodes[i].droppable_connections = droppable_connections;
+    }
+}
+
 pub fn jumpability_check(
     start_graph_node: &PathfindingGraphNode,
     goal_graph_node: &PathfindingGraphNode,
@@ -467,6 +550,138 @@ pub fn jumpability_check(
     } else {
         None
     }
+}
+
+pub fn droppability_check(
+    start_graph_node: &PathfindingGraphNode,
+    goal_graph_node: &PathfindingGraphNode,
+    level: &Level,
+    radius: f32,
+) -> Option<f32> {
+    let start_pos = start_graph_node.position;
+    let goal_pos = goal_graph_node.position;
+
+    // Ensure goal is below start (already checked in make_droppable_connections, but double-check)
+    if goal_pos.y >= start_pos.y {
+        return None;
+    }
+
+    // Calculate falling time: t = sqrt(2 * distance / gravity)
+    let delta_y = start_pos.y - goal_pos.y;
+    let delta_x = goal_pos.x - start_pos.x;
+    let fall_time = (2.0 * delta_y / GRAVITY_STRENGTH).sqrt();
+
+    // Calculate horizontal velocity needed (if any)
+    let horizontal_velocity = if fall_time > 0.0 {
+        delta_x / fall_time
+    } else {
+        0.0
+    };
+
+    // Simulate falling trajectory in discrete steps
+    let timestep = fall_time / JUMPABILITY_CHECK_TIMESTEP_DIVISIONS as f32;
+    let acceleration = Vec2::new(0.0, -GRAVITY_STRENGTH);
+    let initial_velocity = Vec2::new(horizontal_velocity, 0.0);
+
+    // Check for collisions along the falling path
+    'polygon: for polygon_index in 0..level.polygons.len() {
+        let polygon = &level.polygons[polygon_index];
+        'line: for line_index in 1..polygon.points.len() {
+            // Skip lines that belong to the source or target nodes
+            let start_node_on_line = start_graph_node.polygon_index == polygon_index
+                && start_graph_node.line_indicies.contains(&(line_index - 1));
+            let goal_node_on_line = goal_graph_node.polygon_index == polygon_index
+                && goal_graph_node.line_indicies.contains(&(line_index - 1));
+
+            if start_node_on_line || goal_node_on_line {
+                continue 'line;
+            }
+
+            let line_start = polygon.points[line_index - 1];
+            let line_end = polygon.points[line_index];
+
+            let mut prev_pos = start_pos;
+
+            // Simulate trajectory in steps
+            for i in 1..=JUMPABILITY_CHECK_TIMESTEP_DIVISIONS {
+                let t = timestep * i as f32;
+                let pos = start_pos + initial_velocity * t + acceleration * t * t / 2.0;
+
+                // Check if we've passed the goal (shouldn't happen, but safety check)
+                if pos.y < goal_pos.y {
+                    break 'polygon;
+                }
+
+                let line_dir = (pos - prev_pos).normalize_or_zero();
+                let line_normal = Vec2::new(-line_dir.y, line_dir.x);
+
+                // Check collision with agent radius offset on both sides
+                let line_beginning_offset_1 = prev_pos + line_normal * radius;
+                let line_beginning_offset_2 = prev_pos - line_normal * radius;
+                let line_end_offset_1 = pos + line_normal * radius;
+                let line_end_offset_2 = pos - line_normal * radius;
+
+                let offset_1_intersection = line_intersect(
+                    line_beginning_offset_1,
+                    line_end_offset_1,
+                    line_start,
+                    line_end,
+                );
+
+                if offset_1_intersection.is_some() {
+                    return None;
+                }
+
+                let offset_2_intersection = line_intersect(
+                    line_beginning_offset_2,
+                    line_end_offset_2,
+                    line_start,
+                    line_end,
+                );
+
+                if offset_2_intersection.is_some() {
+                    return None;
+                }
+
+                prev_pos = pos;
+            }
+
+            // Check final segment to goal
+            let line_dir = (goal_pos - prev_pos).normalize_or_zero();
+            let line_normal = Vec2::new(-line_dir.y, line_dir.x);
+
+            let line_beginning_offset_1 = prev_pos + line_normal * radius;
+            let line_beginning_offset_2 = prev_pos - line_normal * radius;
+            let line_end_offset_1 = goal_pos + line_normal * radius;
+            let line_end_offset_2 = goal_pos - line_normal * radius;
+
+            let offset_1_intersection = line_intersect(
+                line_beginning_offset_1,
+                line_end_offset_1,
+                line_start,
+                line_end,
+            );
+
+            if offset_1_intersection.is_some() {
+                return None;
+            }
+
+            let offset_2_intersection = line_intersect(
+                line_beginning_offset_2,
+                line_end_offset_2,
+                line_start,
+                line_end,
+            );
+
+            if offset_2_intersection.is_some() {
+                return None;
+            }
+        }
+    }
+
+    // If we made it here, the drop is valid
+    // Return the drop distance as effort (will be multiplied by DROP_EFFORT_MULTIPLIER in make_droppable_connections)
+    Some((start_pos - goal_pos).length())
 }
 
 pub fn calculate_normals(pathfinding: &mut PathfindingGraph, level: &Level) {

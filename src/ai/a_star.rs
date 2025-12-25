@@ -87,6 +87,7 @@ pub fn find_path(
             .walkable_connections
             .iter()
             .chain(current_graph_node.jumpable_connections.iter())
+            .chain(current_graph_node.droppable_connections.iter())
         {
             let connected_node_id = connection.node_id;
 
@@ -98,7 +99,7 @@ pub fn find_path(
             let connected_graph_node = &pathfinding.nodes[connected_node_id];
             let mut new_node = AStarNode::new(connected_graph_node);
 
-            // Set the g-cost: distance + effort (jumps are more expensive)
+            // Set the g-cost: distance + effort (jumps are more expensive, drops are cheaper)
             new_node.g_cost =
                 current_node.g_cost + connection.dist + EFFORT_WEIGHT * connection.effort;
 
@@ -110,8 +111,6 @@ pub fn find_path(
 
             open_list.push(new_node);
         }
-
-        // TODO: Consider droppable_connections in pathfinding when implementing drop-down mechanics
     }
 }
 
@@ -228,6 +227,7 @@ impl AStarNode {
         let connections = [
             graph_node.walkable_connections.as_slice(),
             graph_node.jumpable_connections.as_slice(),
+            graph_node.droppable_connections.as_slice(),
         ]
         .concat();
 

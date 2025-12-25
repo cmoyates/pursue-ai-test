@@ -80,16 +80,20 @@ pub struct PlatformerAI {
 }
 
 pub fn s_platformer_ai_movement(
-    mut platformer_ai_query: Query<
-        (&mut Transform, &mut Physics, &mut PlatformerAI, &crate::ai::pursue_ai::PursueAI),
-    >,
+    mut platformer_ai_query: Query<(
+        &mut Transform,
+        &mut Physics,
+        &mut PlatformerAI,
+        &crate::ai::pursue_ai::PursueAI,
+    )>,
     pathfinding: Res<PathfindingGraph>,
     gismo_visible: Res<GizmosVisible>,
     goal_point_query: Query<&Transform, (With<GoalPoint>, Without<PlatformerAI>)>,
     goal_enabled: Res<GoalEnabled>,
     mut gizmos: Gizmos,
 ) {
-    for (mut transform, mut physics, mut platformer_ai, pursue_ai) in platformer_ai_query.iter_mut() {
+    for (mut transform, mut physics, mut platformer_ai, pursue_ai) in platformer_ai_query.iter_mut()
+    {
         // Get goal point position
         let goal_position = if goal_enabled.enabled {
             // When goal is enabled, use the goal point position
